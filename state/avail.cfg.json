@@ -1,0 +1,44 @@
+{
+    "enabled": true,
+    "targets": [
+
+    ],
+    "sources": [
+        "./logs/avail.txt"
+    ],
+    "breaker": "expression",
+    "expression": "^\\d{4}-\\d{2}-\\d{2} ",
+    "fields": "^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2}) (?<hour>\\d{2}):(?<minute>\\d{2}):(?<second>\\d{2}),(?<ms>\\d{3})\\s+(?<level>\\S+)\\s\\[(?<service>.*)\\]\\s(?<namespace>\\S+)\\s-\\s(?<msg>[\\S\\s]*)$",
+    "destinations": [
+        {
+            "name": "provider",
+            "connector": "url",
+            "url": "http://localhost:8090",
+            "workspaceId": "7544f951-a0fa-4d13-a194-3d105f1055f9",
+            "workspaceKey": "uKqdfIxjEAXvv0xYZt7DkgvBuupP5pg6vajpg1akiHFJaSkoxHu2g1XB7ZXAbnR36zzwwVYr+o9GIigH93K7Sg==",
+            "logType": "logagg_axios",
+            "timestampField": "timestamp"
+        },
+        {
+            "name": "customer",
+            "and": [
+                {
+                    "field": "level",
+                    "test": "ERROR"
+                }
+            ],
+            "url": "http://localhost:8091"
+        }
+    ],
+    "metrics": [
+        {
+            "name": "reboots",
+            "and": [
+                {
+                    "field": "msg",
+                    "test": "(reboot)"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,42 @@
+{
+    "enabled": false,
+    "targets": [
+
+    ],
+    "sources": [
+        "./logs/rfc.log"
+    ],
+    "fields": "^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})T(?<hour>\\d{2}):(?<minute>\\d{2}):(?<second>\\d{2})(?:.(?<ms>\\d{3}))?Z (?<user>\\S+) (?<process>.+)\\[(?<pid>\\S+)\\]: (?<msg>.*)$",
+    "destinations": [
+        {
+            "name": "provider",
+            "connector": "URL",
+            "url": "http://localhost:8090",
+            "workspaceId": "7544f951-a0fa-4d13-a194-3d105f1055f9",
+            "workspaceKey": "uKqdfIxjEAXvv0xYZt7DkgvBuupP5pg6vajpg1akiHFJaSkoxHu2g1XB7ZXAbnR36zzwwVYr+o9GIigH93K7Sg==",
+            "logType": "logagg_axios",
+            "timestampField": "timestamp"
+        },
+        {
+            "name": "customer",
+            "and": [
+                {
+                    "field": "msg",
+                    "test": "(reboot|digital|TCP)"
+                }
+            ],
+            "url": "http://localhost:8091"
+        }
+    ],
+    "metrics": [
+        {
+            "name": "reboots",
+            "and": [
+                {
+                    "field": "msg",
+                    "test": "(reboot)"
+                }
+            ]
+        }
+    ]
+}

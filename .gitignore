@@ -1,0 +1,6 @@
+node_modules/
+logs/
+built/
+state/*.evt.json
+state/*.mtx.json
+test.ts

@@ -1,0 +1,44 @@
+{
+    "enabled": false,
+    "targets": [
+
+    ],
+    "sources": [
+        "./logs/requestevaluator.txt"
+    ],
+    "breaker": "blank-line",
+    "ignore": "^HISTO-START",
+    "fields": "^(?<year>\\d{4})(?<month>\\d{2})(?<day>\\d{2})_(?<hour>\\d{2}).(?<minute>\\d{2}).(?<second>\\d{2})[|](?<level>\\S*)[|](?<app>\\S*)[|]PacketID:(?<packetId>\\d*)\nhost:(?<host>\\S*)\\nprocess:(?<process>\\d*)\\nversion:(?<version>\\S*)\\n?(?:Summary: (?<summary>[^\\n]*)\\n?)?(?:ODSummary: (?<odsummary_0>\\S*)\\n?)?(?:ODSummary: (?<odsummary_1>\\S*)\\n?)?(?:ODSummary: (?<odsummary_2>\\S*)\\n?)?(?:ODSummary: (?<odsummary_3>\\S*)\\n?)?(?:ODSummary: (?<odsummary_4>\\S*)\\n?)?(?:ODSummary: (?<odsummary_5>\\S*)\\n?)?(?:ODSummary: (?<odsummary_6>\\S*)\\n?)?(?:ODSummary: (?<odsummary_7>\\S*)\\n?)?(?:ODSummary: (?<odsummary_8>\\S*)\\n?)?(?:ODSummary: (?<odsummary_9>\\S*)\\n?)?(?:ODSummary: (?<odsummary_10>\\S*)\\n?)?(?:ODSummary: (?<odsummary_11>\\S*)\\n?)?(?:ODSummary: (?<odsummary_12>\\S*)\\n?)?(?:ODSummary: (?<odsummary_13>\\S*)\\n?)?(?:ODSummary: (?<odsummary_14>\\S*)\\n?)?(?:ODSummary: (?<odsummary_15>\\S*)\\n?)?(?:ODSummary: (?<odsummary_16>\\S*)\\n?)?(?:ODSummary: (?<odsummary_17>\\S*)\\n?)?$",
+    "destinations": [
+        {
+            "name": "provider",
+            "connector": "URL",
+            "url": "http://localhost:8090",
+            "workspaceId": "7544f951-a0fa-4d13-a194-3d105f1055f9",
+            "workspaceKey": "uKqdfIxjEAXvv0xYZt7DkgvBuupP5pg6vajpg1akiHFJaSkoxHu2g1XB7ZXAbnR36zzwwVYr+o9GIigH93K7Sg==",
+            "logType": "logagg_axios",
+            "timestampField": "timestamp"
+        },
+        {
+            "name": "customer",
+            "and": [
+                {
+                    "field": "msg",
+                    "test": "(reboot|digital|TCP)"
+                }
+            ],
+            "url": "http://localhost:8091"
+        }
+    ],
+    "metrics": [
+        {
+            "name": "reboots",
+            "and": [
+                {
+                    "field": "msg",
+                    "test": "(reboot)"
+                }
+            ]
+        }
+    ]
+}
