@@ -24,11 +24,11 @@ declare global {
 
     interface Array<T> {
         remove(o: T): void;
-        removeAll(o: Array<T>): void;
+        removeAll(o: T[]): void;
     }
 
     interface String {
-        combineAsPath(...parts: Array<string>): string;
+        combineAsPath(...parts: string[]): string;
     }
 
 }

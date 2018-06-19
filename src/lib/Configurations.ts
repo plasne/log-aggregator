@@ -42,7 +42,7 @@ export default class Configurations extends Array<Configuration> {
             const response = await axios.get(this.url);
 
             // look for new configs and/or changes to their sources
-            const source: Array<ConfigurationJSON> = response.data;
+            const source: ConfigurationJSON[] = response.data;
             for (const config of source) {
                 const hash = objhash(config);
                 const existing = this.find(c => c.name === config.name);

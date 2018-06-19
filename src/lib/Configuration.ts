@@ -9,14 +9,14 @@ import { MetricJSON } from "./Metric";
 export interface ConfigurationJSON {
     enabled?:      boolean;
     name:          string;
-    targets?:      Array<string>;
-    sources:       Array<string>;
+    targets?:      string[];
+    sources:       string[];
     breaker?:      string;
     expression?:   string;
     ignore?:       string;
     fields:        string;
-    destinations?: Array<DestinationJSON>;
-    metrics?:      Array<MetricJSON>;
+    destinations?: DestinationJSON[];
+    metrics?:      MetricJSON[];
 }
 
 export interface BreakerResult {
@@ -29,14 +29,14 @@ export default class Configuration {
     public          hash:          string;
     public readonly enabled:       boolean                   = true;
     public readonly name:          string;
-    public readonly targets?:      Array<string>;
-    public readonly sources:       Array<string>;
+    public readonly targets?:      string[];
+    public readonly sources:       string[];
     public readonly breaker:       string                    = "every-line";
     public readonly expression?:   string;
     public readonly ignore?:       string;
     public readonly fields:        string;
-    public readonly destinations?: Array<Destination>;
-    public readonly metrics?:      Array<MetricJSON>;
+    public readonly destinations?: Destination[];
+    public readonly metrics?:      MetricJSON[];
     public          watcher?:      chokidar.FSWatcher;
 
     static get timestampFields() {

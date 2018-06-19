@@ -29,7 +29,7 @@ export default class LogFile {
         };
 
         // function to offer all rows to each destination
-        const offer = (buffer: string, checkpoints: Array<Checkpoint>, destinations: Array<Destination>, pointer: number) => {
+        const offer = (buffer: string, checkpoints: Checkpoint[], destinations: Destination[], pointer: number) => {
 
             // convert to rows
             const rows = this.configuration.bufferToRows(buffer, this.path);

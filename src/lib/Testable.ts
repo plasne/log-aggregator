@@ -3,16 +3,16 @@
 import Operation, { OperationJSON } from "./Operation";
 
 export interface TestableJSON {
-    and?: Array<OperationJSON>;
-    or?:  Array<OperationJSON>;
-    not?: Array<OperationJSON>;
+    and?: OperationJSON[];
+    or?:  OperationJSON[];
+    not?: OperationJSON[];
 }
 
 export default class Testable {
 
-    public and?: Array<Operation> = undefined;
-    public or?:  Array<Operation> = undefined;
-    public not?: Array<Operation> = undefined;
+    public and?: Operation[] = undefined;
+    public or?:  Operation[] = undefined;
+    public not?: Operation[] = undefined;
 
     testAnd(row: any) {
         if (!this.and || this.and.length < 1) return true;

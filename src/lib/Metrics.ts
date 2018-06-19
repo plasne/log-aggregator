@@ -48,7 +48,7 @@ export default class Metrics extends Array<Metric> {
     }
 
     /** Offer to custom metrics. */
-    offer(rows: Array<any>, file: string, config: Configuration) {
+    offer(rows: any[], file: string, config: Configuration) {
         if (config.metrics) {
 
             // add to existing or create if required

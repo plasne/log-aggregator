@@ -24,19 +24,19 @@ export interface DestinationJSON extends TestableJSON {
 export default class Destination extends Testable {
 
     public name:          string;
-    public connector:     connector  = "auto";
+    public connector:     connector     = "auto";
     public url?:          string;
     public workspaceId?:  string;
     public workspaceKey?: string;
     public logType?:      string;
-    public buffer:        Array<any> = [];
+    public buffer:        any[]         = [];
     public handle?:       NodeJS.Timer;
 
     get isBusy() {
         return (this.handle);
     }
 
-    offer(rows: Array<any>, checkpoint: Checkpoint, pointer: number) {
+    offer(rows: any[], checkpoint: Checkpoint, pointer: number) {
         
         // record the last offered pointer, this ensures that even if the buffers contain
         //  undispatched records, the same block isn't read from the file again
@@ -78,7 +78,7 @@ export default class Destination extends Testable {
 
     }
 
-    postToLogAnalytics(batch: Array<any>) {
+    postToLogAnalytics(batch: any[]) {
 
         // check for the required fields
         if (!this.workspaceId || !this.workspaceKey || !this.logType) {
@@ -143,7 +143,7 @@ export default class Destination extends Testable {
 
     }
 
-    postToURL(batch: Array<any>) {
+    postToURL(batch: any[]) {
 
         // check for the required fields
         if (!this.url) {
@@ -159,7 +159,7 @@ export default class Destination extends Testable {
 
     }
 
-    post(batch: Array<any>) {
+    post(batch: any[]) {
         if (this.workspaceId && this.workspaceKey && this.logType) {
             return this.postToLogAnalytics(batch);
         } else if (this.url) {
@@ -169,7 +169,7 @@ export default class Destination extends Testable {
         }
     }
 
-    private get connectorFunction(): (batch: Array<any>) => void {
+    private get connectorFunction(): (batch: any[]) => void {
         switch (this.connector.toLowerCase()) {
             case "loganalytics":
                 global.logger.log("verbose", `destination "${this.name}" connector is set to "LogAnalytics".`);

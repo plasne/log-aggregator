@@ -7,8 +7,7 @@
         "target": "esnext",
         "module": "commonjs",
         "lib": [
-            "es2018",
-            "es2015"
+            "es2018"
         ],
         "allowJs": true,
         "checkJs": true,

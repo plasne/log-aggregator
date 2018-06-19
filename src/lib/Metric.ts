@@ -12,12 +12,12 @@ export interface MetricJSON extends TestableJSON {
     name:     string,
     node?:    string,
     file?:    string,
-    entries?: Array<DataPoint>
+    entries?: DataPoint[]
 }
 
 export interface Chart {
-    time: Array<string>,
-    data: Array<number>
+    time: string[],
+    data: number[]
 }
 
 export default class Metric extends Array<DataPoint> {
@@ -43,7 +43,7 @@ export default class Metric extends Array<DataPoint> {
         }
     }
 
-    public offer(rows: Array<any>): void {
+    public offer(rows: any[]): void {
 
         // filter
         const filtered = rows.filter(row => {
@@ -62,7 +62,7 @@ export default class Metric extends Array<DataPoint> {
 
     }
 
-    public uncommitted(): Array<DataPoint> | null {
+    public uncommitted(): DataPoint[] | null {
 
         // advance the start, or start at 0 on first
         let start = this.findIndex(entry => entry.ts === this.committed);
@@ -106,7 +106,7 @@ export default class Metric extends Array<DataPoint> {
         }
     }
 
-    public merge(list: Array<DataPoint>) {
+    public merge(list: DataPoint[]) {
         for (const entry of list) {
             const existing = this.find(e => e.ts === entry.ts);
             if (existing) {
@@ -117,7 +117,7 @@ export default class Metric extends Array<DataPoint> {
         }
     }
 
-    static chart(entries: Array<DataPoint>, pointer: moment.Moment, earliest: moment.Moment, rate: number): Chart {
+    static chart(entries: DataPoint[], pointer: moment.Moment, earliest: moment.Moment, rate: number): Chart {
         const chart = {
             time: [],
             data: []

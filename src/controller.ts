@@ -195,7 +195,7 @@ app.post("/metrics/:hostname", async (req, res) => {
     try {
 
         // merge and trim the metrics
-        const names: Array<string> = [];
+        const names: string[] = [];
         for (const metric of req.body) {
             metrics.merge(metric, true);
             names.push(metric.name);
@@ -264,7 +264,7 @@ app.get("/summary", async (req, res) => {
             errorsLastHour: number
         }
         const summary = {
-            nodes: [] as Array<node>,
+            nodes: [] as node[],
             volume: undefined as Chart | undefined
         };
         

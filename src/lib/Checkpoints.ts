@@ -22,7 +22,7 @@ export default class Checkpoints extends Array<Checkpoint> {
         return (this.handle != null);
     }
 
-    byPathAndDestination(path: string, destinations: Array<Destination>) {
+    byPathAndDestination(path: string, destinations: Destination[]) {
         const list = [];
         for (const destination of destinations) {
 
