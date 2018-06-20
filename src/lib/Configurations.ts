@@ -41,6 +41,8 @@ export default class Configurations extends Array<Configuration> {
             global.logger.log("verbose", `getting configuration from "${this.url}"...`);
             const response = await axios.get(this.url);
 
+            // kk: if statement here to get from blob or local???
+
             // look for new configs and/or changes to their sources
             const source: ConfigurationJSON[] = response.data;
             for (const config of source) {

@@ -14,6 +14,7 @@ import Metrics from "./lib/Metrics";
 import Metric, { Chart } from "./lib/Metric";
 import Events from "./lib/Events";
 import Configurations from "./lib/Configurations";
+import Blob from "./lib/Blob";
 
 // prototypes
 require("./lib/String.prototype.combineAsPath.js");
@@ -35,13 +36,19 @@ cmd
     .version("0.1.0")
     .option("-l, --log-level <string>", `LOG_LEVEL. The minimum level to log to the console (error, warn, info, verbose, debug, silly). Defaults to "error".`, /^(error|warn|info|verbose|debug|silly)$/i)
     .option("-p, --port <integer>", `PORT. The port to host the web services on. Defaults to "8080".`, parseInt)
-    .option("-s, --state-path <string>", `STATE_PATH. The path to all files mananging current state. Defaults to "./state".`)
+    .option("-s, --state-path <string>", `STATE_PATH. The path or URL to all files mananging current state. Defaults to "./state".`)
+    .option("-a, --storage-account <string>", `STORAGE_ACCOUNT.  The storage account to be used with blob storage, if used.`)
+    .option("-k, --storage-key <string>", `STORAGE_KEY. The storage key to be used with blob storage, if SAS is not used.`)
+    .option("-t, --storage-sas <string>", `STORAGE_SAS.  The SAS to be used with blob storage, if storage key is not used.`)
     .parse(process.argv);
 
 // locals
-const logLevel: string         = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
-const port:     number         = cmd.port       || process.env.PORT                || 8080;
-const state:    string         = cmd.statePath  || process.env.STATE_PATH          || "./state";
+const logLevel: string         = cmd.logLevel       || process.env.LOG_LEVEL            || "error";
+const port:     number         = cmd.port           || process.env.PORT                 || 8080;
+const state:    string         = cmd.statePath      || process.env.STATE_PATH           || "./state";
+const account:  string         = cmd.storageAccount || process.env.STORAGE_ACCOUNT      || "";
+const key:      string         = cmd.storageKey     || process.env.STORAGE_KEY          || "";
+const sas:      string         = cmd.storageSas     || process.env.STORAGE_SAS          || "";
 const configs:  Configurations = new Configurations();
 const metrics:  Metrics        = new Metrics();
 const events:   Events         = new Events();
