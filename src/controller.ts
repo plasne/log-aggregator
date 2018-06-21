@@ -86,6 +86,7 @@ global.logger.log("verbose", `port = "${port}".`);
 global.logger.log("verbose", `state = "${state}".`);
 
 // update the config
+//  TODO: move under Configurations class once file handler is in place
 async function updateConfig(path: string) {
     try {
         global.logger.log("verbose", `loading "${path}"...`);
