@@ -5,4 +5,5 @@ state/*.evt.json
 state/*.mtx.json
 test.ts
 test.js
+built/test.js
 .env

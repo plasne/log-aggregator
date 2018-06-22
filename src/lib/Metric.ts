@@ -15,9 +15,15 @@ export interface MetricJSON extends TestableJSON {
     entries?: DataPoint[]
 }
 
+export interface Series<T> {
+    name: string,
+    data: T[]
+}
+
 export interface Chart {
-    time: string[],
-    data: number[]
+    name?:  string,
+    time:   string[],
+    series: Series<number>[]
 }
 
 export default class Metric extends Array<DataPoint> {
@@ -117,28 +123,71 @@ export default class Metric extends Array<DataPoint> {
         }
     }
 
-    static chart(entries: DataPoint[], pointer: moment.Moment, earliest: moment.Moment, rate: number): Chart {
-        const chart = {
-            time: [],
-            data: []
-        } as Chart;
+    sum(since?: moment.Moment) {
+        const ts = (since) ? since.utc().format("YYYY-MM-DDTHH:mm") : undefined;
+        let total = 0;
+        for (const entry of this) {
+            if (!ts || entry.ts >= ts) total += entry.v;
+        }
+        return total;
+    }
 
+    static chart(series: Series<DataPoint>[], pointer: moment.Moment, earliest: moment.Moment, rate: number): Chart {
+
+        // initialize
+        pointer = pointer.clone();
+        const chart = {
+            time:   [],
+            series: []
+        } as Chart;
+        for (const _series of series) {
+            chart.series.push({
+                name: _series.name,
+                data: []
+            });
+        }
+
+        // create the series
         while (pointer > earliest) {
             const time: string = pointer.format();
             chart.time.push(time);
-            let total = 0;
+            const totals: {
+                [index: number]: number
+            } = {};
             for (let i = 0; i < rate; i++) {
                 const ts = pointer.format("YYYY-MM-DDTHH:mm");
-                const slice = entries.filter(entry => entry.ts === ts)
-                for (const entry of slice) {
-                    total += entry.v;
+                for (let j = 0; j < series.length; j++) {
+                    const slice = series[j].data.filter(entry => entry.ts === ts);
+                    for (const entry of slice) {
+                        totals[j] = (totals[j] || 0) + entry.v;
+                    }
                 }
                 pointer.subtract(1, "minute");
             }
-            chart.data.push(total);
+            for (let i = 0; i < series.length; i++) {
+                chart.series[i].data.push(totals[i] || 0);
+            }
         }
 
         return chart;
+    }
+
+    toJSON(): MetricJSON {
+
+        // create a list of entries (didn't use slice since it would clone Metric)
+        const entries: DataPoint[] = [];
+        for (let entry of this) {
+            entries.push(entry);
+        }
+
+        // return the JSON
+        return {
+            name: this.name,
+            node: this.node,
+            file: this.file,
+            entries: entries
+        } as MetricJSON;
+
     }
 
     constructor(obj: MetricJSON) {

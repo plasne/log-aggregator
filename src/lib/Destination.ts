@@ -24,7 +24,7 @@ export interface DestinationJSON extends TestableJSON {
 export default class Destination extends Testable {
 
     public name:          string;
-    public connector:     connector     = "auto";
+    public connector?:    connector;
     public url?:          string;
     public workspaceId?:  string;
     public workspaceKey?: string;
@@ -36,7 +36,25 @@ export default class Destination extends Testable {
         return (this.handle);
     }
 
-    offer(rows: any[], checkpoint: Checkpoint, pointer: number) {
+    public halt() {
+        if (this.handle) {
+            clearTimeout(this.handle);
+            this.handle = undefined;
+        }
+        this.buffer = [];
+    }
+
+    public isSame(other: DestinationJSON) {
+        if (this.name !== other.name) return false;
+        if (this.connector !== other.connector) return false;
+        if (this.url !== other.url) return false;
+        if (this.workspaceId !== other.workspaceId) return false;
+        if (this.workspaceKey !== other.workspaceKey) return false;
+        if (this.logType !== other.logType) return false;
+        return true;
+    }
+
+    public offer(rows: any[], checkpoint: Checkpoint, pointer: number) {
         
         // record the last offered pointer, this ensures that even if the buffers contain
         //  undispatched records, the same block isn't read from the file again
@@ -78,7 +96,7 @@ export default class Destination extends Testable {
 
     }
 
-    postToLogAnalytics(batch: any[]) {
+    private postToLogAnalytics(batch: any[]) {
 
         // check for the required fields
         if (!this.workspaceId || !this.workspaceKey || !this.logType) {
@@ -143,7 +161,7 @@ export default class Destination extends Testable {
 
     }
 
-    postToURL(batch: any[]) {
+    private postToURL(batch: any[]) {
 
         // check for the required fields
         if (!this.url) {
@@ -159,7 +177,7 @@ export default class Destination extends Testable {
 
     }
 
-    post(batch: any[]) {
+    private post(batch: any[]) {
         if (this.workspaceId && this.workspaceKey && this.logType) {
             return this.postToLogAnalytics(batch);
         } else if (this.url) {
@@ -170,7 +188,7 @@ export default class Destination extends Testable {
     }
 
     private get connectorFunction(): (batch: any[]) => void {
-        switch (this.connector.toLowerCase()) {
+        switch ((this.connector || "auto").toLowerCase()) {
             case "loganalytics":
                 global.logger.log("verbose", `destination "${this.name}" connector is set to "LogAnalytics".`);
                 return this.postToLogAnalytics;
@@ -183,7 +201,7 @@ export default class Destination extends Testable {
         }
     }
 
-    dispatch() {
+    public dispatch() {
 
         // there is no reason to run
         if (this.buffer.length < 1) {

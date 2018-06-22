@@ -16,4 +16,13 @@ export default class LogFiles extends Array<LogFile> {
         }
     }
 
+    delete(path: string) {
+        const existing = this.find(file => file.isMatch(path));
+        if (existing) {
+            this.remove(existing);
+            existing.halt();
+            global.logger.log("verbose", `file "${path}" will no longer watched for changes.`);
+        }
+    }
+
 }

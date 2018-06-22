@@ -1,26 +1,38 @@
 
 // includes
 import * as fs from "fs";
-import * as util from "util";
+import { promises as fsp } from "fs";
 import Configuration from "./Configuration.js";
 import Checkpoint from "./Checkpoint";
 import Destination from "./Destination";
-
-// promisify
-const statAsync = util.promisify(fs.stat);
 
 export default class LogFile {
 
     public path:          string;
     public configuration: Configuration;
 
-    private handle: NodeJS.Timer | null = null;
+    private handle?: NodeJS.Timer;
 
     public get isBusy(): boolean {
         return (this.handle != null);
     }
 
-    read() {
+    public halt() {
+        if (this.handle) {
+            clearTimeout(this.handle);
+            this.handle = undefined;
+        }
+    }
+
+    public isMatch(path: string) {
+        const local = this.path.toLowerCase();
+        const remote = path.toLowerCase();
+        if (local === remote) return true;
+        if (local === remote.substr(-local.length)) return true; // sometimes the path might be full or partial
+        return false;
+    }
+
+    public read() {
 
         // if the file is already being read (or scheduled to be read), abort
         if (this.isBusy) {
@@ -55,6 +67,9 @@ export default class LogFile {
             try {
                 global.logger.log("debug", `start reading "${this.path}"...`);
 
+                // TODO: remove me!!!!
+                global.metrics.add("__error", this.path, 1);
+
                 // find all destinations that are ready
                 const destinations = this.configuration.destinations || [];
                 const ready = destinations.filter(destination => !destination.isBusy);
@@ -70,7 +85,7 @@ export default class LogFile {
                 global.logger.log("silly", `${checkpoints.length} checkpoints were found by path and destination.`);
 
                 // reset any checkpoints that aren't valid
-                const stats = await statAsync(this.path);
+                const stats = await fsp.stat(this.path);
                 for (const checkpoint of checkpoints) {
                     if (checkpoint.ino !== stats.ino || checkpoint.buffered > stats.size) {
                         global.logger.log("debug", `on read of "${this.path}", checkpoint for "${checkpoint.destination}" was reset.`);
@@ -100,7 +115,7 @@ export default class LogFile {
                         this.handle = setTimeout(_ => { action(); }, 1000); // defer 1 second
                     } else {
                         global.logger.log("debug", `on read of "${this.path}", all checkpoints are at end of file (done).`);
-                        this.handle = null; // there is nothing left to do
+                        this.handle = undefined; // there is nothing left to do
                     }
                     return;
                 }

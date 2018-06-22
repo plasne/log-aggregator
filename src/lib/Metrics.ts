@@ -8,6 +8,11 @@ export default class Metrics extends Array<Metric> {
 
     public readonly url?: string;
 
+    /* Stores the last code generated for metrics received from a node. */
+    public codes: {
+        [node: string]: string
+    } = {};
+
     add(name: string, file: string, v: number) {
         const existing = this.find(metric => metric.name === name && metric.node === global.node && metric.file === file);
         if (existing) {
@@ -100,10 +105,10 @@ export default class Metrics extends Array<Metric> {
 
                 // mark as committed and trim
                 for (const sent of msg) {
-                    const actual = this.find(metric => metric.name === sent.name && metric.node === sent.node);
+                    const actual = this.find(metric => metric.name === sent.name && metric.node === sent.node && metric.file === sent.file);
                     if (actual) {
                         actual.committed = sent.entries[sent.entries.length - 1].ts;
-                        global.logger.log("silly", `metric "${actual.name}" committed to "${actual.committed}".`);
+                        global.logger.log("silly", `metric "${actual.name}" for "${actual.file}" committed to "${actual.committed}".`);
                         actual.trim();
                     }
                 }
