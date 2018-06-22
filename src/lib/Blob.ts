@@ -47,7 +47,7 @@ export default class Blob {
     // create the azure container
     createContainer(container: string) {
         return new Promise((resolve, reject) => {
-            this.service.createContainerIfNotExists(container, function (error, result, response) {
+            this.service.createContainerIfNotExists(container, function (error, result) {
                 if (error) {
                     global.logger.log("error", `Container "${container}" could not be created: ${error}`);
                     reject(error);
@@ -61,7 +61,7 @@ export default class Blob {
     // write block blob
     write(container: string, blob: string, text: string) {
         return new Promise((resolve, reject) => {
-            this.service.createBlockBlobFromText(container, blob, text, function (error, result, response) {
+            this.service.createBlockBlobFromText(container, blob, text, function (error, result) {
                 if (error) {
                     global.logger.log("error", `Blob "${blob}" could not be created with text: ${error}`);
                     reject(error);
@@ -75,7 +75,7 @@ export default class Blob {
     // read specified block blob contents as JSON
     read(container: string, blob: string) {
         return new Promise((resolve, reject) => {
-            this.service.getBlobToText(container, blob, function (error, result, response) {
+            this.service.getBlobToText(container, blob, function (error, result) {
                 if (error) {
                     global.logger.log("error", `Could not read blob "${blob}" in container "${container}": ${error}`);
                     reject(error);
