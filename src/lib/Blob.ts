@@ -1,14 +1,10 @@
-
 // includes
 import azs = require("azure-storage");
-import * as fs from "fs";
 import { BlobService } from "azure-storage";
-import { error } from "util";
 
 type modes = "account/key" | "host/sas";
 
 export default class Blob {
-
     public account?: string;
     public key?: string;
     public host?: string;
@@ -16,82 +12,78 @@ export default class Blob {
     public service!: BlobService;
 
     // connect to azure storage
-    private async function createService() {
-        if (null !== this.sas && null !== this.host) {
+    createService() {
+        if (this.sas && this.host) {
             global.logger.log("verbose", `SAS found, connecting to Azure storage`);
             this.service = azs.createBlobServiceWithSas(this.host, this.sas);
-        } else if (null !== this.account && null !== this.key) {
+        } else if (this.account && this.key) {
             global.logger.log("verbose", `Account and key found, connecting to Azure storage`);
             this.service = azs.createBlobService(this.account, this.key);
         } else {
             global.logger.log("error", `Could not connect to Azure storage; no credentials supplied`);
 
-            // no read/write possible without a connection
             throw new Error(`Could not connect to Azure storage; no credentials supplied`);
         }
     }
 
-    // create a new container if not exists
-    private async function createContainer(container: string) {
-        this.service.createContainerIfNotExists(container, function (error, result, response) {
-            if (error) {
-                global.logger.log("error", `Container "${container}" connect/create encountered an error: ${error}`);
-                return false;
-            }
-
-            return true;
-        });
-    }
-
-    // create an empty append blob for writing 
-    private async function createBlob(container: string, name: string) {
-        this.service.createAppendBlobFromText(container, name, '', function (error, result, response) {
-            if (error) {
-                global.logger.log("error", `Blob "${name}" encountered an error: ${error}`);
-                return false;
-            }
-
-            return true;
-        });
-    }
-
-    // return the blob data or connect to container if not exists
-    private async function blobDataOrConnect(error: Error, text: string) {
-        if (error) {
-            // TODO: parse error and create if needed
-            global.logger.log("error", `Error getting blob "${blobName}"`);
-            global.logger.error(error);
-
-            try {
-                const containerResponse = await this.createContainer(container);
-                const blobResponse = await this.createBlob(container, blobName);
-            } catch (e) {
-                global.logger.log("error", `Error creating container/blob`);
-                global.logger.error(e);
-            }
-
-            return false;
+    // write the block blob, or if the container does not exist, create container and then write block blob
+    async writeOrCreate(container: string, blob: string, text: string) {
+        try {
+            await this.write(container, blob, text);
+            return;
+        } catch (e) {
+            global.logger.log("error", `Could not write to container: ${e}`);
         }
 
-        return true;
+        global.logger.log("verbose", `Attempting to create container "${container}"`);
+        try {
+            await this.createContainer(container);
+            await this.write(container, blob, text);
+        } catch (e) {
+            throw new Error(`Could not create container "${container}": ${e}`);
+        }
     }
 
-    // read contents of existing blob, or create the container and blob if not exists
-    async read(container: string, blobName: string) {
-        this.service.getBlobToText(container, blobName, this.blobDataOrConnect);
+    // create the azure container
+    createContainer(container: string) {
+        return new Promise((resolve, reject) => {
+            this.service.createContainerIfNotExists(container, function (error, result, response) {
+                if (error) {
+                    global.logger.log("error", `Container "${container}" could not be created: ${error}`);
+                    reject(error);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
     }
 
-    // append text to existing blob
-    async write(container: string, blobName: string, text: string) {
-        this.service.appendFromText(container, blob, text, function (error, result, response) {
-            if (error) {
-                global.logger.log("error", `Error appending "${text}" to blob "${blob}"`);
-                global.logger.error(error);
+    // write block blob
+    write(container: string, blob: string, text: string) {
+        return new Promise((resolve, reject) => {
+            this.service.createBlockBlobFromText(container, blob, text, function (error, result, response) {
+                if (error) {
+                    global.logger.log("error", `Blob "${blob}" could not be created with text: ${error}`);
+                    reject(error);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
 
-                return false;
-            }
-
-            return true;
+    // read specified block blob contents as JSON
+    read(container: string, blob: string) {
+        return new Promise((resolve, reject) => {
+            this.service.getBlobToText(container, blob, function (error, result, response) {
+                if (error) {
+                    global.logger.log("error", `Could not read blob "${blob}" in container "${container}": ${error}`);
+                    reject(error);
+                } else {
+                    const json = JSON.parse(result);
+                    resolve(json);
+                }
+            });
         });
     }
 
@@ -108,7 +100,7 @@ export default class Blob {
         }
 
         // create the service so it can be used to read/write
-        // do not catch - without a service we can't continue
-        await this.createService();
+        // do not catch - without a service we cannot continue
+        this.createService();
     }
 }
