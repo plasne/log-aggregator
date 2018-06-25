@@ -77,6 +77,8 @@ transport.on("logged", event => {
             node: global.node,
             msg: event.message
         });
+        const file = event.file || "__process";
+        global.metrics.add("__error", file, 1);
     }
 });
 

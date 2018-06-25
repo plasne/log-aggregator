@@ -198,7 +198,7 @@ export default class Configuration {
 
     }
 
-    constructor(obj: ConfigurationJSON) {
+    constructor(obj: ConfigurationJSON, prior?: Configuration) {
 
         // compute the hash
         //  NOTE: this is used to determine if a new configuration is provided on a refresh
@@ -218,7 +218,19 @@ export default class Configuration {
         if (obj.destinations) {
             this.destinations = [];
             for (const destination of obj.destinations) {
-                this.destinations.push( new Destination(destination) );
+                if (prior && prior.destinations) {
+                    const existing = prior.destinations.find(d => d.isSame(destination));
+                    if (existing) {
+                        this.destinations.push(existing);
+                        global.logger.log("debug", `destination "${destination.name}" was reused.`);
+                    } else {
+                        this.destinations.push( new Destination(destination) );
+                        global.logger.log("debug", `destination "${destination.name}" was created.`);
+                    }
+                } else {
+                    this.destinations.push( new Destination(destination) );
+                    global.logger.log("debug", `destination "${destination.name}" was created.`);
+                }
             }
         }
 

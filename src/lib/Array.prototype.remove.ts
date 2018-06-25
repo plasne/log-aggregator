@@ -1,5 +1,4 @@
 
-
 if (!Array.prototype.remove) {
     Array.prototype.remove = function<T>(obj: T): void {
         const index = this.indexOf(obj);

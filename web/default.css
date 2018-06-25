@@ -1,0 +1,14 @@
+
+div.chart {
+    display : block;
+    width : 95%;
+    height : 400px;
+}
+
+#events {
+    color : red;
+}
+
+#reports > * {
+    margin-right : 16px;
+}

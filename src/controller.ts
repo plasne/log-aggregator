@@ -3,26 +3,22 @@
 // includes
 import cmd = require("commander");
 import * as winston from "winston";
-import * as fs from "fs";
+import { promises as fsp } from "fs";
 import express = require("express");
 import * as chokidar from "chokidar";
 import moment = require("moment");
-import * as util from "util";
 import * as bodyParser from "body-parser";
 import { v4 as uuid } from "uuid";
+import shortid = require("shortid");
 import Metrics from "./lib/Metrics";
-import Metric, { Chart } from "./lib/Metric";
+import Metric, { Chart, MetricJSON, DataPoint, Series } from "./lib/Metric";
 import Events from "./lib/Events";
 import Configurations from "./lib/Configurations";
 import Blob from "./lib/Blob";
 
-// prototypes
+// prototype extensions
 require("./lib/String.prototype.combineAsPath.js");
-
-// promisify
-const statAsync = util.promisify(fs.stat);
-const readFileAsync = util.promisify(fs.readFile);
-const writeFileAsync = util.promisify(fs.writeFile);
+require("./lib/Array.prototype.groupBy.js");
 
 // startup express
 const app = express();
@@ -90,11 +86,11 @@ global.logger.log("verbose", `state = "${state}".`);
 async function updateConfig(path: string) {
     try {
         global.logger.log("verbose", `loading "${path}"...`);
-        const raw = await readFileAsync(path, {
+        const raw = await fsp.readFile(path, {
             encoding: "utf8"
         });
         const obj = JSON.parse(raw);
-        const match = /^(.*)[/](?<filename>.*)$/.exec(path);
+        const match = /^(.*)\/(?<filename>.*)$/.exec(path);
         obj.name = (match && match.groups) ? match.groups.filename : uuid();
         const index = configs.findIndex(config => config.name === obj.name);
         if (index < 0) {
@@ -154,8 +150,7 @@ app.get("/checkpoints/:hostname", async (req, res) => {
 
         // read the checkpoint file
         try {
-            await statAsync(checkpointsPath);
-            const raw = await readFileAsync(checkpointsPath, "utf-8");
+            const raw = await fsp.readFile(checkpointsPath, "utf8");
             const obj = JSON.parse(raw);
             global.logger.log("verbose", `"${req.params.hostname}" was given the checkpoint file.`);
             global.logger.log("debug", raw);
@@ -183,8 +178,7 @@ app.post("/checkpoints/:hostname", async (req, res) => {
         const checkpointsPath = state.combineAsPath(`${req.params.hostname}.chk.json`);
         try {
             global.logger.log("verbose", `writing checkpoint file "${checkpointsPath}"...`);
-            // TODO: renable checkpointing
-            //writeFileAsync(checkpointsPath, JSON.stringify(req.body));
+            await fsp.writeFile(checkpointsPath, JSON.stringify(req.body));
             global.logger.log("verbose", `wrote checkpoint file "${checkpointsPath}".`);
         } catch (error) {
             global.logger.error(`error writing checkpoint file "${checkpointsPath}".`);
@@ -203,20 +197,27 @@ app.post("/metrics/:hostname", async (req, res) => {
     try {
 
         // merge and trim the metrics
-        const names: string[] = [];
         for (const metric of req.body) {
             metrics.merge(metric, true);
-            names.push(metric.name);
         }
         global.logger.log("verbose", `merged metrics from "${req.params.hostname}".`);
 
         // commit to disk
-        const filtered = metrics.filter(metric => metric.node === req.params.hostname && names.includes(metric.name));
+        const metricPath = state.combineAsPath(`${req.params.hostname}.mtx.json`);
+        const filtered = metrics.filter(metric => metric.node === req.params.hostname);
+        const data: {
+            code:    string,
+            metrics: MetricJSON[]
+        } = {
+            code:    shortid.generate(),
+            metrics: []
+        };
+        metrics.codes[req.params.hostname] = data.code;
         for (const metric of filtered) {
-            const metricsPath = state.combineAsPath(`${req.params.hostname}.${metric.name}.mtx.json`);
-            writeFileAsync(metricsPath, JSON.stringify(metric));
-            global.logger.log("verbose", `metrics committed to disk as "${metricsPath}".`);
+            data.metrics.push(metric.toJSON());
         }
+        await fsp.writeFile(metricPath, JSON.stringify(data));
+        global.logger.log("verbose", `metrics committed to disk as "${metricPath}".`);
 
         res.status(200).end();
     } catch (error) {
@@ -239,7 +240,7 @@ app.post("/events/:hostname", async (req, res) => {
         // commit to disk
         const filtered = events.filter(event => event.node === req.params.hostname);
         const eventsPath = state.combineAsPath(`${req.params.hostname}.evt.json`);
-        writeFileAsync(eventsPath, JSON.stringify(filtered));
+        await fsp.writeFile(eventsPath, JSON.stringify(filtered));
         global.logger.log("verbose", `events committed to disk as "${eventsPath}".`);
 
         res.status(200).end();
@@ -249,17 +250,41 @@ app.post("/events/:hostname", async (req, res) => {
     }
 });
 
-app.get("/metrics", (_, res) => {
-
-    for (const metric of metrics) {
-        let total = 0;
-        for (const entry of metric) {
-            total += entry.v;
+// update the metrics
+//  TODO: move under Metrics class once file handler is in place
+async function updateMetrics(path: string) {
+    try {
+        global.logger.log("verbose", `loading "${path}"...`);
+        const match = /^(.*)\/(?<node>.*)\.mtx\.json$/.exec(path);
+        if (match && match.groups && match.groups.node) {
+            const raw = await fsp.readFile(path, "utf8");
+            const data: {
+                code:    string,
+                metrics: MetricJSON[]
+            } = JSON.parse(raw);
+            if (metrics.codes[match.groups.node] !== data.code) {
+                for (const obj of data.metrics) {
+                    metrics.merge(obj, true);
+                }
+                global.logger.log("verbose", `merged ${data.metrics.length} metrics from "${path}".`);
+            } else {
+                global.logger.log("verbose", `ignoring "${path}" because this process generated the file.`);
+            }
         }
-        console.log(`${metric.name} from ${metric.node} for ${metric.file}: ${total}`);
+    } catch (error) {
+        global.logger.error(`could not load and parse "${path}".`);
+        global.logger.error(error.stack);
     }
-    res.status(200).end();
+}
 
+// read the metrics files
+const metricPath = state.combineAsPath("*.mtx.json");
+global.logger.log("verbose", `started watching "${metricPath}" for metric files...`);
+const metricWatcher = chokidar.watch(metricPath);
+metricWatcher.on("add", path => {
+    updateMetrics(path);
+}).on("change", async path => {
+    updateMetrics(path);
 });
 
 app.get("/summary", async (req, res) => {
@@ -273,30 +298,49 @@ app.get("/summary", async (req, res) => {
         }
         const summary = {
             nodes: [] as node[],
-            volume: undefined as Chart | undefined
+            chart: undefined as Chart | undefined
         };
         
         // collect info on metrics
-        const volume = [];
-        for (const metric of metrics) {
-            const existing = summary.nodes.find(node => node.name === metric.node);
+        const hourAgo = moment().subtract(1, "hour");
+        const volume: Series<DataPoint> = {
+            name: "volume",
+            data: []
+        };
+        const errors: Series<DataPoint> = {
+            name: "errors",
+            data: []
+        };
+        const filtered = metrics.filter(metric => metric.name === "__volume" || metric.name === "__error");
+        for (const metric of filtered) {
+            let existing = summary.nodes.find(node => node.name === metric.node);
             if (!existing) {
-                summary.nodes.push({
+                existing = {
                     name: metric.node,
                     logsLastHour: 0,
                     errorsLastHour: 0
-                });
+                };
+                summary.nodes.push(existing);
             }
-            for (const entry of metric) {
-                volume.push(entry);
+            if (metric.name === "__volume") {
+                existing.logsLastHour += metric.sum(hourAgo);
+                for (const entry of metric) {
+                    volume.data.push(entry);
+                }
+            }
+            if (metric.name === "__error") {
+                existing.errorsLastHour += metric.sum(hourAgo);
+                for (const entry of metric) {
+                    errors.data.push(entry);
+                }
             }
         }
 
-        // chart for volume data
+        // chart for volume & error data
         const rate = req.query.rate || 15;
         const pointer = moment().utc().startOf("minute");
         const earliest = moment().utc().subtract(3, "days");
-        summary.volume = Metric.chart(volume, pointer.clone(), earliest, rate);
+        summary.chart = Metric.chart([ volume, errors], pointer, earliest, rate);
         
         // respond
         res.send(summary);
@@ -307,9 +351,55 @@ app.get("/summary", async (req, res) => {
     }
 });
 
+app.get("/by-:dimension/:hostname", async (req, res) => {
+    try {
+
+        // output
+        const charts: Chart[] = [];
+
+        // variables
+        const rate = req.query.rate || 15;
+        const pointer = moment().utc().startOf("minute");
+        const earliest = moment().utc().subtract(3, "days");
+
+        // group by dimension
+        const grouped = metrics.groupBy(metric => {
+            if (metric.node !== req.params.hostname) return null;
+            if (req.params.dimension === "name") return metric.name;
+            if (req.params.dimension === "file") return metric.file;
+            return null;
+        });
+
+        // build the charts
+        for (const group of grouped) {
+            const series: Series<DataPoint>[] = [];
+            for (const metric of group.values) {
+                let name = "unknown";
+                if (req.params.dimension === "name" && metric.file) name = metric.file;
+                if (req.params.dimension === "file") name = metric.name;
+                series.push({
+                    name: name,
+                    data: metric
+                });
+            }
+            const chart = Metric.chart(series, pointer, earliest, rate);
+            chart.name = group.key;
+            charts.push(chart);
+        }
+
+        // respond
+        res.send(charts);
+    
+    } catch (error) {
+        global.logger.error(error.stack);
+        res.status(500).end();
+    }
+
+});
+
 // redirect to default web page
 app.get("/", (_, res) => {
-    res.redirect("/default.html");
+    res.redirect("/summary.html");
 });
 
 // listen for web traffic

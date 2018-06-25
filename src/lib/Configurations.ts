@@ -19,6 +19,10 @@ export default class Configurations extends Array<Configuration> {
                 global.logFiles.notify(path, config);
             }).on("change", path => {
                 global.logFiles.notify(path, config);
+            }).on("raw", (event, path) => {
+                if (event === "moved" || event === "deleted") {
+                    global.logFiles.delete(path);
+                }
             });
             global.logger.log("debug", `added configuration "${config.name}".`);
         }
@@ -32,7 +36,7 @@ export default class Configurations extends Array<Configuration> {
         }
     }
 
-    // get the configs and watch/unwatch as appropriate
+    // get the configs from the controller and watch/unwatch as appropriate
     async refresh() {
         if (!this.url) return;
         try {
@@ -59,8 +63,10 @@ export default class Configurations extends Array<Configuration> {
                     }
 
                     // remove the old, add this new
+                    const updated = new Configuration(config, existing);
+                    const diff = (updated.destinations || []).diff(existing.destinations || []);
+                    diff.targetOnly.forEach(d => d.halt());
                     this.remove(existing);
-                    const updated = new Configuration(config);
                     this.push(updated);
 
                     // start watching everything in the new
@@ -91,14 +97,12 @@ export default class Configurations extends Array<Configuration> {
                     global.logger.log("silly", `configuration "${config.name}" was removed.`);
                     for (const path of config.sources) {
                         this.unwatch(path, config);
+                        if (config.destinations) config.destinations.forEach(d => d.halt());
                     }
                     listToRemove.push(config);
                 }
             }
-            for (const config of listToRemove) {
-                const index = this.indexOf(config);
-                if (index > -1) this.splice(index, 1);
-            }
+            this.removeAll(listToRemove);
 
         } catch (error) {
             global.logger.error("Configuration could not be refreshed.");
