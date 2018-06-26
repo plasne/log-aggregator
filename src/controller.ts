@@ -33,18 +33,18 @@ cmd
     .option("-l, --log-level <string>", `LOG_LEVEL. The minimum level to log to the console (error, warn, info, verbose, debug, silly). Defaults to "error".`, /^(error|warn|info|verbose|debug|silly)$/i)
     .option("-p, --port <integer>", `PORT. The port to host the web services on. Defaults to "8080".`, parseInt)
     .option("-s, --state-path <string>", `STATE_PATH. The path or URL to all files mananging current state. Defaults to "./state".`)
-    .option("-a, --storage-account <string>", `STORAGE_ACCOUNT.  The storage account to be used with blob storage, if used.`)
-    .option("-k, --storage-key <string>", `STORAGE_KEY. The storage key to be used with blob storage, if SAS is not used.`)
-    .option("-t, --storage-sas <string>", `STORAGE_SAS.  The SAS to be used with blob storage, if storage key is not used.`)
+    .option("-m, --storage-mode <string>", `STORAGE_MODE.  Connection method to blob storage ("account/key", "host/sas").`, /^(account\/key|host\/sas)$/i)
+    .option("-i, --storage-id <string>", `STORAGE_ID. The storage account or host to be used with blob storage.`)
+    .option("-c, --storage-code <string>", `STORAGE_CODE.  The SAS or key to be used with blob storage.`)
     .parse(process.argv);
 
 // locals
 const logLevel: string         = cmd.logLevel       || process.env.LOG_LEVEL            || "error";
 const port:     number         = cmd.port           || process.env.PORT                 || 8080;
 const state:    string         = cmd.statePath      || process.env.STATE_PATH           || "./state";
-const account:  string         = cmd.storageAccount || process.env.STORAGE_ACCOUNT      || "";
-const key:      string         = cmd.storageKey     || process.env.STORAGE_KEY          || "";
-const sas:      string         = cmd.storageSas     || process.env.STORAGE_SAS          || "";
+const mode:     string         = cmd.storageMode    || process.env.STORAGE_MODE         || "";
+const id:       string         = cmd.storageId      || process.env.STORAGE_ID           || "";
+const code:     string         = cmd.storageCode    || process.env.STORAGE_CODE         || "";
 const configs:  Configurations = new Configurations();
 const metrics:  Metrics        = new Metrics();
 const events:   Events         = new Events();
@@ -81,6 +81,39 @@ console.log(`Log level set to "${logLevel}".`);
 global.logger.log("verbose", `port = "${port}".`);
 global.logger.log("verbose", `state = "${state}".`);
 
+// testing blob storage
+global.logger.log("verbose", `attempting to write/read to/from blob storage`);
+if (mode == 'account/key') {
+    const blob = new Blob('account/key', id, code);
+    blob.writeOrCreate('testcontainer', 'testblob', '{"a":"this is a test"}');
+    let read = blob.read('testcontainer', 'testblob');
+    global.logger.log("silly", `blob contents: ${read}`);
+}
+
+// look for changes to blob storage
+app.post('/event', (req, res) => {
+    const header = req.get("Aeg-Event-Type");
+    if (header && header === 'SubscriptionValidation') {
+        const event = req.body[0];
+        const isValidationEvent = event && event.data &&
+            event.data.validationCode &&
+            event.eventType && event.eventType == 'Microsoft.EventGrid.SubscriptionValidationEvent';
+
+        if (isValidationEvent) {
+            return res.send({ "validationResponse": event.data.validationCode })
+        }
+    }
+
+    // do something for other event types here
+    const ev = req.body[0];
+    if (ev.eventType == 'Microsoft.Storage.BlobCreated') {
+        global.logger.log("verbose", `Blob created`);
+    }
+
+    global.logger.log("debug", `EventGrid event: ${JSON.stringify(req.body)}`);
+    return res.send(req.body);
+});
+
 // update the config
 //  TODO: move under Configurations class once file handler is in place
 async function updateConfig(path: string) {
@@ -114,7 +147,7 @@ configWatcher.on("add", path => {
     updateConfig(path);
 }).on("change", async path => {
     updateConfig(path);
-});
+    });
 
 // provide config files if asked
 app.get("/config/:hostname", (req, res) => {
