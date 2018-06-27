@@ -1,5 +1,6 @@
 
 // includes
+require("dotenv").config();
 import cmd = require("commander");
 import * as winston from "winston";
 import express = require("express");
