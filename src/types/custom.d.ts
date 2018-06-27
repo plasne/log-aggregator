@@ -5,6 +5,7 @@ import Checkpoints from "../lib/Checkpoints";
 import LogFiles from "../lib/LogFiles";
 import Configurations from "../lib/Configurations";
 import Events_ from "../lib/Events";
+import { BlobService } from "azure-storage";
 
 declare global {
 
@@ -45,4 +46,17 @@ declare global {
         combineAsPath(...parts: string[]): string;
     }
 
+}
+
+// support null for continuation token in TS
+declare module "azure-storage" {
+    module services {
+        module blob {
+            module blobservice {
+                interface BlobService {
+                    listBlobsSegmented(container: string, currentToken: common.ContinuationToken | null, callback: ErrorOrResult<BlobService.ListBlobsResult>): void;
+                }
+            }
+        }
+    }
 }

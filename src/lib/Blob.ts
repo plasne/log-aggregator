@@ -2,7 +2,7 @@
 import azs = require("azure-storage");
 import { BlobService } from "azure-storage";
 
-type modes = "account/key" | "host/sas";
+type modes = "account/key" | "host/sas" | "file";
 
 export default class Blob {
     public account?: string;
@@ -101,7 +101,8 @@ export default class Blob {
                         global.logger.log("error", `Could not read contents of container "${container}": ${error}`);
                         reject(error);
                     } else {
-                        resolve(result);
+                        let list: BlobService.BlobResult[] = result.entries;
+                        resolve(list);
                     }
                 });
             } catch (e) {

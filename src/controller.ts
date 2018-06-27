@@ -1,5 +1,3 @@
-
-
 // includes
 import cmd = require("commander");
 import * as winston from "winston";
@@ -15,10 +13,14 @@ import Metric, { Chart, MetricJSON, DataPoint, Series } from "./lib/Metric";
 import Events from "./lib/Events";
 import Configurations from "./lib/Configurations";
 import Blob from "./lib/Blob";
+import { BlobService } from "azure-storage";
 
 // prototype extensions
 require("./lib/String.prototype.combineAsPath.js");
 require("./lib/Array.prototype.groupBy.js");
+
+// acceptable storage modes
+type modes = "account/key" | "host/sas" | "file";
 
 // startup express
 const app = express();
@@ -33,7 +35,7 @@ cmd
     .option("-l, --log-level <string>", `LOG_LEVEL. The minimum level to log to the console (error, warn, info, verbose, debug, silly). Defaults to "error".`, /^(error|warn|info|verbose|debug|silly)$/i)
     .option("-p, --port <integer>", `PORT. The port to host the web services on. Defaults to "8080".`, parseInt)
     .option("-s, --state-path <string>", `STATE_PATH. The path or URL to all files mananging current state. Defaults to "./state".`)
-    .option("-m, --storage-mode <string>", `STORAGE_MODE.  Connection method to blob storage ("account/key", "host/sas").`, /^(account\/key|host\/sas)$/i)
+    .option("-m, --storage-mode <string>", `STORAGE_MODE.  Connection method to blob storage ("account/key", "host/sas").`, /^(account\/key|host\/sas|file)$/i)
     .option("-i, --storage-id <string>", `STORAGE_ID. The storage account or host to be used with blob storage.`)
     .option("-c, --storage-code <string>", `STORAGE_CODE.  The SAS or key to be used with blob storage.`)
     .parse(process.argv);
@@ -42,7 +44,7 @@ cmd
 const logLevel: string         = cmd.logLevel       || process.env.LOG_LEVEL            || "error";
 const port:     number         = cmd.port           || process.env.PORT                 || 8080;
 const state:    string         = cmd.statePath      || process.env.STATE_PATH           || "./state";
-const mode:     string         = cmd.storageMode    || process.env.STORAGE_MODE         || "";
+const mode:     modes          = cmd.storageMode    || process.env.STORAGE_MODE         || "file";
 const id:       string         = cmd.storageId      || process.env.STORAGE_ID           || "";
 const code:     string         = cmd.storageCode    || process.env.STORAGE_CODE         || "";
 const configs:  Configurations = new Configurations();
@@ -80,15 +82,6 @@ global.logger = winston.createLogger({
 console.log(`Log level set to "${logLevel}".`);
 global.logger.log("verbose", `port = "${port}".`);
 global.logger.log("verbose", `state = "${state}".`);
-
-// testing blob storage
-global.logger.log("verbose", `attempting to write/read to/from blob storage`);
-if (mode == 'account/key') {
-    const blob = new Blob('account/key', id, code);
-    blob.writeOrCreate('testcontainer', 'testblob', '{"a":"this is a test"}');
-    let read = blob.read('testcontainer', 'testblob');
-    global.logger.log("silly", `blob contents: ${read}`);
-}
 
 // look for changes to blob storage
 app.post('/event', (req, res) => {
@@ -139,15 +132,58 @@ async function updateConfig(path: string) {
     }
 }
 
+async function loadBlobConfigs(mode: modes, id: string, code: string, state: string) {
+    let container = '';
+
+    // retrieve the container from the state path
+    const containerMatch = state.match(/[^/]+$/);
+
+    if (containerMatch && containerMatch.length == 1) {
+        container = containerMatch[0];
+    }
+
+    global.logger.log("verbose", `container: ${container}`);
+
+    if (container.length > 0) {
+        global.logger.log("verbose", `attempting to read from blob storage`);
+        const blob = new Blob(mode, id, code);
+        const list = await blob.list(container) as BlobService.BlobResult[];
+        global.logger.log("silly", `blob contents: ${JSON.stringify(list)}`);
+        global.logger.log("silly", `blob contents: ${typeof(list)}`);
+
+        let configs: string[] = [];
+
+        list.forEach(function (config) {
+            global.logger.log("silly", `config: ${config.name}`);
+            configs.push(config.name);
+        });
+
+        global.logger.log("silly", `configs: ${configs}`);
+
+    } else {
+        global.logger.log("error", `no container specified`);
+    }
+}
+
 // read the config files
-const configPath = state.combineAsPath("*.cfg.json");
-global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
-const configWatcher = chokidar.watch(configPath);
-configWatcher.on("add", path => {
-    updateConfig(path);
-}).on("change", async path => {
-    updateConfig(path);
+if (mode != 'file') {
+    // use blob storage
+    // testing blob storage
+
+    loadBlobConfigs(mode, id, code, state);
+    
+} else {
+    // use local files
+    const configPath = state.combineAsPath("*.cfg.json");
+    global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
+    const configWatcher = chokidar.watch(configPath);
+    configWatcher.on("add", path => {
+        updateConfig(path);
+    }).on("change", async path => {
+        updateConfig(path);
     });
+
+}
 
 // provide config files if asked
 app.get("/config/:hostname", (req, res) => {
