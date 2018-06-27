@@ -84,7 +84,7 @@ export default class Configurations extends Array<Configuration> {
     }
 
     // get the configs from the controller and watch/unwatch as appropriate
-    public async refresh() {
+    public async fetch() {
         if (!this.url) return;
         try {
 
@@ -184,32 +184,36 @@ export default class Configurations extends Array<Configuration> {
     constructor(obj: ConfigurationsJSON) {
         super();
 
-        // capture the mode
+        // startup depending on the mode
         this.mode = obj.mode;
-        if (this.mode === "controller") this.expose();
+        switch (this.mode) {
+            case "controller":
 
-        // if a URL is specified, configurations will be received from a remote controller
-        if (obj.url) {
-            this.url = obj.url;
-            return;
-        }
+                // expose endpoints
+                this.expose();
 
-        // from here down, everything assumes the configurations are retrieved locally
-
-        // if path, read the config files from a local disk
-        if (obj.path) {
-            const configPath = obj.path.combineAsPath("*.cfg.json");
-            global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
-            const configWatcher = chokidar.watch(configPath);
-            configWatcher.on("add", path => {
-                this.updateFromPath(path);
-            }).on("change", async path => {
-                this.updateFromPath(path);
-            }).on("raw", (event, path) => {
-                if (event === "moved" || event === "deleted") {
-                    this.delete(path);
+                // read the config files from a local disk
+                if (obj.path) {
+                    const configPath = obj.path.combineAsPath("*.cfg.json");
+                    global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
+                    const configWatcher = chokidar.watch(configPath);
+                    configWatcher.on("add", path => {
+                        this.updateFromPath(path);
+                    }).on("change", async path => {
+                        this.updateFromPath(path);
+                    }).on("raw", (event, path) => {
+                        if (event === "moved" || event === "deleted") {
+                            this.delete(path);
+                        }
+                    });
                 }
-            });
+
+                break;
+
+            case "dispatcher":
+                if (obj.url) this.url = obj.url;
+                break;
+
         }
 
     }

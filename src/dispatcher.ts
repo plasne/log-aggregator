@@ -111,9 +111,9 @@ global.metrics        = new Metrics({
         // if unsuccessful, try again after the interval
         if (global.checkpoints.isInitialized) {
             setInterval(() => {
-                global.configurations.refresh();
+                global.configurations.fetch();
             }, interval);
-            global.configurations.refresh();
+            global.configurations.fetch();
         } else {
             await delay(interval);
         }
