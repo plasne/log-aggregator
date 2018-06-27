@@ -1,35 +1,35 @@
 {
-  "name": "log-agg-ts",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "dependencies": {
-    "adal-node": "^0.1.28",
-    "axios": "^0.18.0",
-    "body-parser": "^1.18.3",
-    "chokidar": "^2.0.3",
-    "commander": "^2.15.1",
-    "dotenv": "^6.0.0",
-    "express": "^4.16.3",
-    "lorem-ipsum": "^1.0.5",
-    "moment": "^2.22.2",
-    "object-hash": "^1.3.0",
-    "shortid": "^2.2.8",
-    "uuid": "^3.2.1",
-    "winston": "^3.0.0-rc6"
-  },
-  "devDependencies": {
-    "@types/body-parser": "^1.17.0",
-    "@types/chokidar": "^1.7.5",
-    "@types/express": "^4.16.0",
-    "@types/lorem-ipsum": "^1.0.2",
-    "@types/object-hash": "^1.2.0",
-    "@types/shortid": "0.0.29",
-    "@types/uuid": "^3.4.3"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC"
+    "name": "logagg",
+    "version": "1.0.0",
+    "description": "",
+    "main": "built/controller.js",
+    "dependencies": {
+        "adal-node": "^0.1.28",
+        "axios": "^0.18.0",
+        "body-parser": "^1.18.3",
+        "chokidar": "^2.0.3",
+        "commander": "^2.15.1",
+        "dotenv": "^6.0.0",
+        "express": "^4.16.3",
+        "lorem-ipsum": "^1.0.5",
+        "moment": "^2.22.2",
+        "object-hash": "^1.3.0",
+        "shortid": "^2.2.8",
+        "uuid": "^3.2.1",
+        "winston": "^3.0.0-rc6"
+    },
+    "devDependencies": {
+        "@types/body-parser": "^1.17.0",
+        "@types/chokidar": "^1.7.5",
+        "@types/express": "^4.16.0",
+        "@types/lorem-ipsum": "^1.0.2",
+        "@types/object-hash": "^1.2.0",
+        "@types/shortid": "0.0.29",
+        "@types/uuid": "^3.4.3"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "",
+    "license": "ISC"
 }

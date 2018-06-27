@@ -5,8 +5,13 @@ import { Router } from "express";
 import * as chokidar from "chokidar";
 import objhash = require("object-hash");
 import { v4 as uuid } from "uuid";
-import { promises as fsp } from "fs";
+import * as fs from "fs";
+import * as util from "util";
+import * as path from "path";
 import Configuration, { ConfigurationJSON } from "./Configuration.js";
+
+// promisify
+const readFileAsync = util.promisify(fs.readFile);
 
 type modes = "controller" | "dispatcher";
 
@@ -39,7 +44,7 @@ export default class Configurations extends Array<Configuration> {
 
             // load the file
             global.logger.log("verbose", `loading "${path}"...`);
-            const raw = await fsp.readFile(path, {
+            const raw = await readFileAsync(path, {
                 encoding: "utf8"
             });
             const obj = JSON.parse(raw) as ConfigurationJSON;
@@ -194,7 +199,7 @@ export default class Configurations extends Array<Configuration> {
 
                 // read the config files from a local disk
                 if (obj.path) {
-                    const configPath = obj.path.combineAsPath("*.cfg.json");
+                    const configPath = path.join(obj.path, "*.cfg.json");
                     global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
                     const configWatcher = chokidar.watch(configPath);
                     configWatcher.on("add", path => {

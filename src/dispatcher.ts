@@ -4,13 +4,15 @@ import cmd = require("commander");
 import * as winston from "winston";
 import * as os from "os";
 import * as util from "util";
+import * as path from "path";
 import Checkpoints from "./lib/Checkpoints";
 import Configurations from "./lib/Configurations";
 import LogFiles from "./lib/LogFiles";
 import Metrics from "./lib/Metrics";
 
-// prototypes
-require("./lib/String.prototype.combineAsPath.js");
+// prototype extensions
+require("./lib/Array.prototype.diff.js");
+require("./lib/Array.prototype.groupBy.js");
 require("./lib/Array.prototype.remove.js");
 
 // promisify
@@ -62,6 +64,30 @@ global.logger = winston.createLogger({
     level: logLevel,
     transports: [ transport ]
 });
+
+// log variables
+console.log(`Log level set to "${logLevel}".`);
+global.logger.log("verbose", `Dispatcher name = "${global.node}".`);
+if (!url) throw new Error("You must specify a controller URL to run this application.");
+global.logger.log("verbose", `Controller URL = "${url}".`);
+global.logger.log("verbose", `Controller interval = "${interval}".`);
+
+// managers (must be after log startup)
+global.checkpoints    = new Checkpoints({
+    mode: "dispatcher",
+    url:  path.join(url, "checkpoints", global.node)
+});
+global.configurations = new Configurations({
+    mode: "dispatcher",
+    url:  path.join(url, "config", global.node)
+});
+global.logFiles       = new LogFiles();
+global.metrics        = new Metrics({
+    mode: "dispatcher",
+    url:  path.join(url, "metrics", global.node)
+});
+
+// dispatch relevant vents to a log endpoint (needs to be after global.configurations has started up)
 transport.on("logged", event => {
     // this can cause a recursive loop...
     //   so only allow a minimum standard
@@ -74,28 +100,6 @@ transport.on("logged", event => {
             events.destinations.forEach(destination => destination.offer([event]));
         }
     }
-});
-
-// log startup
-console.log(`Log level set to "${logLevel}".`);
-global.logger.log("verbose", `Dispatcher name = "${global.node}".`);
-if (!url) throw new Error("You must specify a controller URL to run this application.");
-global.logger.log("verbose", `Controller URL = "${url}".`);
-global.logger.log("verbose", `Controller interval = "${interval}".`);
-
-// managers (must be after log startup)
-global.checkpoints    = new Checkpoints({
-    mode: "dispatcher",
-    url:  url.combineAsPath("checkpoints/", global.node)
-});
-global.configurations = new Configurations({
-    mode: "dispatcher",
-    url:  url.combineAsPath("config/", global.node)
-});
-global.logFiles       = new LogFiles();
-global.metrics        = new Metrics({
-    mode: "dispatcher",
-    url:  url.combineAsPath("metrics/", global.node)
 });
 
 // startup

@@ -1,10 +1,13 @@
 
 // includes
 import * as fs from "fs";
-import { promises as fsp } from "fs";
+import * as util from "util";
 import Configuration from "./Configuration.js";
 import Checkpoint from "./Checkpoint";
 import Destination from "./Destination";
+
+// promisify
+const statAsync = util.promisify(fs.stat);
 
 export default class LogFile {
 
@@ -74,7 +77,7 @@ export default class LogFile {
                 global.logger.log("silly", `${checkpoints.length} checkpoints were found by path and destination.`);
 
                 // reset any checkpoints that aren't valid
-                const stats = await fsp.stat(this.path);
+                const stats = await statAsync(this.path);
                 for (const checkpoint of checkpoints) {
                     if (checkpoint.ino !== stats.ino || checkpoint.buffered > stats.size) {
                         global.logger.log("debug", `on read of "${this.path}", checkpoint for "${checkpoint.destination}" was reset.`);

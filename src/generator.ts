@@ -5,8 +5,12 @@
 import cmd = require("commander");
 import moment = require("moment");
 import loremIpsum = require("lorem-ipsum");
-import { promises as fs } from "fs";
+import * as fs from "fs";
+import * as util from "util";
 import * as readline from "readline";
+
+// promisify
+const appendFileAsync = util.promisify(fs.appendFile);
 
 // define command line parameters
 cmd
@@ -134,7 +138,7 @@ cmd
     .action(async (filename: string, format: string) => {
         try {
             const line = formatFunc(format)();
-            await fs.appendFile(filename, line);
+            await appendFileAsync(filename, line);
             console.log("1 line written.");
         } catch (error) {
             console.error(error);
@@ -152,7 +156,7 @@ cmd
         setInterval(async () => {
             try {
                 const line = formatFunc(format)();
-                await fs.appendFile(filename, line);
+                await appendFileAsync(filename, line);
                 count++;
                 readline.clearLine(process.stdout, 0);
                 readline.cursorTo(process.stdout, 0);

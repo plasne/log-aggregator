@@ -2,12 +2,18 @@
 // includes
 import axios from "axios";
 import { Router } from "express";
-import { promises as fsp } from "fs";
+import * as fs from "fs";
+import * as util from "util";
+import * as path from "path";
 import shortid = require("shortid");
 import * as chokidar from "chokidar";
 import moment = require("moment");
 import Metric, { MetricJSON, Chart, Series, DataPoint } from "./Metric.js";
 import Configuration from "./Configuration.js";
+
+// promisify
+const readFileAsync = util.promisify(fs.readFile);
+const writeFileAsync = util.promisify(fs.writeFile);
 
 type modes = "controller" | "dispatcher";
 
@@ -97,7 +103,7 @@ export default class Metrics extends Array<Metric> {
             global.logger.log("verbose", `loading "${path}"...`);
             const match = /^(.*)\/(?<node>.*)\.mtx\.json$/.exec(path);
             if (match && match.groups && match.groups.node) {
-                const raw = await fsp.readFile(path, "utf8");
+                const raw = await readFileAsync(path, "utf8");
                 const data: {
                     code:    string,
                     metrics: MetricJSON[]
@@ -168,7 +174,7 @@ export default class Metrics extends Array<Metric> {
         }
     }
 
-    private expose(path: string) {
+    private expose(statepath: string) {
         this.router = Router();
 
         // accept metrics
@@ -182,7 +188,7 @@ export default class Metrics extends Array<Metric> {
                 global.logger.log("verbose", `merged metrics from "${req.params.hostname}".`);
 
                 // commit to disk
-                const metricPath = path.combineAsPath(`${req.params.hostname}.mtx.json`);
+                const metricPath = path.join(statepath, `${req.params.hostname}.mtx.json`);
                 const filtered = this.filter(metric => metric.node === req.params.hostname);
                 const data: {
                     code:    string,
@@ -195,7 +201,7 @@ export default class Metrics extends Array<Metric> {
                 for (const metric of filtered) {
                     data.metrics.push(metric.toJSON());
                 }
-                await fsp.writeFile(metricPath, JSON.stringify(data));
+                await writeFileAsync(metricPath, JSON.stringify(data));
                 global.logger.log("verbose", `metrics committed to disk as "${metricPath}".`);
 
                 res.status(200).end();
@@ -295,7 +301,7 @@ export default class Metrics extends Array<Metric> {
                     this.expose(obj.path);
 
                     // read metrics files whenever they are changed so this controller can stay in sync
-                    const metricPath = obj.path.combineAsPath("*.mtx.json");
+                    const metricPath = path.join(obj.path, "*.mtx.json");
                     global.logger.log("verbose", `started watching "${metricPath}" for metric files...`);
                     const metricWatcher = chokidar.watch(metricPath);
                     metricWatcher.on("add", path => {

@@ -2,9 +2,15 @@
 // includes
 import axios from "axios";
 import { Router } from "express";
-import { promises as fsp } from "fs";
+import * as fs from "fs";
+import * as util from "util";
+import * as path from "path";
 import Checkpoint from "./Checkpoint";
 import Destination from "./Destination";
+
+// promisify
+const readFileAsync = util.promisify(fs.readFile);
+const writeFileAsync = util.promisify(fs.writeFile);
 
 type modes = "controller" | "dispatcher";
 
@@ -148,7 +154,7 @@ export default class Checkpoints extends Array<Checkpoint> {
 
     }
 
-    private expose(path: string) {
+    private expose(statepath: string) {
         this.router = Router();
 
         // provide checkpoints if asked
@@ -157,12 +163,12 @@ export default class Checkpoints extends Array<Checkpoint> {
 
                 // asking
                 global.logger.log("verbose", `"${req.params.hostname}" is asking for checkpoints...`);
-                const checkpointsPath = path.combineAsPath(`${req.params.hostname}.chk.json`);
+                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
                 global.logger.log("debug", `looking for checkpoint file "${checkpointsPath}"...`);
 
                 // read the checkpoint file
                 try {
-                    const raw = await fsp.readFile(checkpointsPath, "utf8");
+                    const raw = await readFileAsync(checkpointsPath, "utf8");
                     const obj = JSON.parse(raw);
                     global.logger.log("verbose", `"${req.params.hostname}" was given the checkpoint file.`);
                     global.logger.log("debug", raw);
@@ -187,10 +193,10 @@ export default class Checkpoints extends Array<Checkpoint> {
             try {
 
                 // write the checkpoints
-                const checkpointsPath = path.combineAsPath(`${req.params.hostname}.chk.json`);
+                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
                 try {
                     global.logger.log("verbose", `writing checkpoint file "${checkpointsPath}"...`);
-                    await fsp.writeFile(checkpointsPath, JSON.stringify(req.body));
+                    await writeFileAsync(checkpointsPath, JSON.stringify(req.body));
                     global.logger.log("verbose", `wrote checkpoint file "${checkpointsPath}".`);
                 } catch (error) {
                     global.logger.error(`error writing checkpoint file "${checkpointsPath}".`);

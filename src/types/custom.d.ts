@@ -39,8 +39,4 @@ declare global {
         diff(target: T[]): differences<T>;
     }
 
-    interface String {
-        combineAsPath(...parts: string[]): string;
-    }
-
 }
