@@ -8,20 +8,12 @@ import Destination from "./Destination";
 
 export default class LogFile {
 
-    public path:          string;
-    public configuration: Configuration;
-
+    public path:     string;
+    public config:   Configuration;
     private handle?: NodeJS.Timer;
 
     public get isBusy(): boolean {
         return (this.handle != null);
-    }
-
-    public halt() {
-        if (this.handle) {
-            clearTimeout(this.handle);
-            this.handle = undefined;
-        }
     }
 
     public isMatch(path: string) {
@@ -44,7 +36,7 @@ export default class LogFile {
         const offer = (buffer: string, checkpoints: Checkpoint[], destinations: Destination[], pointer: number) => {
 
             // convert to rows
-            const rows = this.configuration.bufferToRows(buffer, this.path);
+            const rows = this.config.bufferToRows(buffer, this.config.name, this.path);
             global.logger.log("silly", `bufferToRows on "${this.path}" resulted in ${rows.entries.length} rows and ${rows.extra} extra bytes.`);
             if (rows.entries.length < 1) return;
 
@@ -58,7 +50,7 @@ export default class LogFile {
             }
 
             // offer for use in custom metrics
-            global.metrics.offer(rows.entries, this.path, this.configuration);
+            global.metrics.offer(rows.entries, this.path, this.config);
 
         }
 
@@ -67,11 +59,8 @@ export default class LogFile {
             try {
                 global.logger.log("debug", `start reading "${this.path}"...`);
 
-                // TODO: remove me!!!!
-                global.metrics.add("__error", this.path, 1);
-
                 // find all destinations that are ready
-                const destinations = this.configuration.destinations || [];
+                const destinations = this.config.destinations || [];
                 const ready = destinations.filter(destination => !destination.isBusy);
                 global.logger.log("silly", `${ready.length} destinations are "ready".`);
                 if (ready.length < 1) {
@@ -142,16 +131,28 @@ export default class LogFile {
                 }).on("error", error => {
                     
                     // try again in a bit
-                    global.logger.error(`on read of "${this.path}", recovery from the error will be attempted (defer).`);
-                    global.logger.error(error.stack);
+                    global.logger.error(`on read of "${this.path}", recovery from the error will be attempted (defer).`, {
+                        config: this.config.name,
+                        file:   this.path
+                    });
+                    global.logger.error(error.stack, {
+                        config: this.config.name,
+                        file:   this.path
+                    });
                     this.handle = setTimeout(_ => { action(); }, 1000);
 
                 });
 
             } catch (error) {
                 // clean this up
-                global.logger.error("error in LogFile.read().action().");
-                global.logger.error(error.stack);
+                global.logger.error("error in LogFile.read().action().", {
+                    config: this.config.name,
+                    file:   this.path
+                });
+                global.logger.error(error.stack, {
+                    config: this.config.name,
+                    file:   this.path
+                });
                 this.handle = setTimeout(_ => { action(); }, 1000);
             }
         }
@@ -161,8 +162,16 @@ export default class LogFile {
 
     }
 
-    constructor(path: string, configuration: Configuration) {
+    /** This should be called before releasing all references to the LogFile. */
+    public dispose() {
+        if (this.handle) {
+            clearTimeout(this.handle);
+            this.handle = undefined;
+        }
+    }
+
+    constructor(path: string, config: Configuration) {
         this.path = path;
-        this.configuration = configuration;
+        this.config = config;
     }
 }

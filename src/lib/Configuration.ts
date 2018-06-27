@@ -27,20 +27,66 @@ export interface BreakerResult {
 export default class Configuration {
 
     public          hash:          string;
+    public          json:          ConfigurationJSON;
+    public          path?:         string;
     public readonly enabled:       boolean                   = true;
     public readonly name:          string;
     public readonly targets?:      string[];
-    public readonly sources:       string[];
+    public readonly sources?:      string[];
     public readonly breaker:       string                    = "every-line";
     public readonly expression?:   string;
     public readonly ignore?:       string;
-    public readonly fields:        string;
+    public readonly fields?:       string;
     public readonly destinations?: Destination[];
     public readonly metrics?:      MetricJSON[];
     public          watcher?:      chokidar.FSWatcher;
 
     static get timestampFields() {
         return [ "year", "month", "day", "hour", "hours", "minute", "minutes", "second", "seconds", "ms", "millisecond", "milliseconds" ];
+    }
+
+    public isMatch(path: string) {
+        if (!this.path) return false;
+        const local = this.path.toLowerCase();
+        const remote = path.toLowerCase();
+        if (local === remote) return true;
+        if (local === remote.substr(-local.length)) return true; // sometimes the path might be full or partial
+        return false;
+    }
+
+    private watch(path: string) {
+        if (this.watcher) {
+            this.watcher.add(path);
+            global.logger.log("debug", `added "${path}" to existing configuration "${this.name}".`);
+        } else {
+            this.watcher = chokidar.watch(path);
+            this.watcher.on("add", path => {
+                global.logFiles.notify(path, this);
+            }).on("change", path => {
+                global.logFiles.notify(path, this);
+            }).on("raw", (event, path) => {
+                if (event === "moved" || event === "deleted") {
+                    global.logFiles.delete(path);
+                }
+            });
+            global.logger.log("debug", `added configuration "${this.name}".`);
+        }
+        global.logger.log("verbose", `started watching "${path}" based on configuration "${this.name}".`);
+    }
+
+    public watchAll() {
+        if (this.sources) this.sources.forEach(path => this.watch(path));
+    }
+
+    private unwatch(path: string) {
+        if (this.watcher) {
+            this.watcher.unwatch(path);
+            global.logger.log("verbose", `unwatched "${path}" based on configuration "${this.name}".`);
+        }
+    }
+
+    public unwatchAll() {
+        if (this.sources) this.sources.forEach(path => this.unwatch(path));
     }
 
     /**
@@ -118,7 +164,12 @@ export default class Configuration {
         }
     }
 
-    public bufferToRows(buffer: string, filename: string): BreakerResult {
+    public bufferToRows(buffer: string, config: string, filename: string): BreakerResult {
+
+        // make sure there is a field breaker
+        if (!this.fields) {
+            throw new Error(`You must specify a RegExp for "fields" in the config "${this.name}".`);
+        }
 
         // execute the breaker
         const result = this.breakerFunction(buffer);
@@ -176,7 +227,10 @@ export default class Configuration {
     
                 } else {
                     const level = (errors === 0) ? "error" : "warn";
-                    global.logger.log(level, `config "${this.name}" fields RegExp couldn't parse "${entry}".`);
+                    global.logger.log(level, `config "${this.name}" fields RegExp couldn't parse "${entry}".`, {
+                        config: config,
+                        file:   filename
+                    });
                     errors++;
                 }
             } else {
@@ -186,7 +240,10 @@ export default class Configuration {
 
         // log additional errors
         if (errors > 1) {
-            global.logger.error(`${errors} total entries could not be parsed by the fields RegExp for config "${this.name}".`);
+            global.logger.error(`${errors} total entries could not be parsed by the fields RegExp for config "${this.name}".`, {
+                config: config,
+                file:   filename
+            });
         }
 
         // return the rows and the extra
@@ -198,14 +255,22 @@ export default class Configuration {
 
     }
 
+    /** This should be called before releasing all references to the Configuration. */
+    public dispose() {
+        global.logger.log("silly", `configuration "${this.name}" was disposed.`);
+        if (this.sources) this.sources.forEach(path => this.unwatch(path));
+        if (this.destinations) this.destinations.forEach(d => d.dispose());
+    }
+
     constructor(obj: ConfigurationJSON, prior?: Configuration) {
 
         // compute the hash
         //  NOTE: this is used to determine if a new configuration is provided on a refresh
         this.hash = objhash(obj);
+        this.json = obj;
         
         // properties
-        if (obj.enabled) this.enabled = obj.enabled;
+        if (obj.enabled !== undefined) this.enabled = obj.enabled;
         this.name = obj.name;
         if (obj.targets) this.targets = obj.targets;
         this.sources = obj.sources;
@@ -222,14 +287,14 @@ export default class Configuration {
                     const existing = prior.destinations.find(d => d.isSame(destination));
                     if (existing) {
                         this.destinations.push(existing);
-                        global.logger.log("debug", `destination "${destination.name}" was reused.`);
+                        global.logger.log("debug", `in config "${this.name}" destination "${destination.name}" was reused.`);
                     } else {
-                        this.destinations.push( new Destination(destination) );
-                        global.logger.log("debug", `destination "${destination.name}" was created.`);
+                        this.destinations.push( new Destination(this, destination) );
+                        global.logger.log("debug", `in config "${this.name}" destination "${destination.name}" was created.`);
                     }
                 } else {
-                    this.destinations.push( new Destination(destination) );
-                    global.logger.log("debug", `destination "${destination.name}" was created.`);
+                    this.destinations.push( new Destination(this, destination) );
+                    global.logger.log("debug", `in config "${this.name}" destination "${destination.name}" was created.`);
                 }
             }
         }

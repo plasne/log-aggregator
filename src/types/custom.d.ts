@@ -4,7 +4,6 @@ import Metrics from "../lib/Metrics";
 import Checkpoints from "../lib/Checkpoints";
 import LogFiles from "../lib/LogFiles";
 import Configurations from "../lib/Configurations";
-import Events_ from "../lib/Events";
 
 declare global {
 
@@ -15,7 +14,6 @@ declare global {
             chunkSize: number,
             logger:  winston.Logger;
             configurations: Configurations;
-            events: Events_;
             metrics: Metrics;
             checkpoints: Checkpoints;
             logFiles: LogFiles

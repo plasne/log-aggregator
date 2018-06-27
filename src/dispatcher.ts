@@ -4,12 +4,10 @@ import cmd = require("commander");
 import * as winston from "winston";
 import * as os from "os";
 import * as util from "util";
-import moment = require("moment");
 import Checkpoints from "./lib/Checkpoints";
 import Configurations from "./lib/Configurations";
 import LogFiles from "./lib/LogFiles";
 import Metrics from "./lib/Metrics";
-import Events from "./lib/Events.js";
 
 // prototypes
 require("./lib/String.prototype.combineAsPath.js");
@@ -30,19 +28,14 @@ cmd
     .parse(process.argv);
 
 // locals
-const logLevel   = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
-const url        = cmd.url        || process.env.CONTROLLER_URL;
-const interval   = cmd.interval   || process.env.CONTROLLER_INTERVAL || 60000;
+const logLevel: string   = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
+const url:      string   = cmd.url        || process.env.CONTROLLER_URL;
+const interval: number   = cmd.interval   || process.env.CONTROLLER_INTERVAL || 60000;
 
 // globals
 global.node           = cmd.nodeName   || process.env.DISPATCHER_NAME     || os.hostname();
 global.chunkSize      = cmd.chunkSize  || process.env.CHUNK_SIZE          || 5000;
 global.batchSize      = cmd.batchSize  || process.env.BATCH_INTERVAL      || 100;
-global.checkpoints    = new Checkpoints(url.combineAsPath("checkpoints/", global.node));
-global.configurations = new Configurations(url.combineAsPath("config/", global.node));
-global.logFiles       = new LogFiles();
-global.metrics        = new Metrics(url.combineAsPath("metrics/", global.node));
-global.events         = new Events(url.combineAsPath("events/", global.node));
 
 // enable logging
 const logColors: {
@@ -70,15 +63,16 @@ global.logger = winston.createLogger({
     transports: [ transport ]
 });
 transport.on("logged", event => {
-    if (event.level === "error") {
-        global.events.push({
-            ts: moment().toISOString(),
-            type: event.level,
-            node: global.node,
-            msg: event.message
-        });
-        const file = event.file || "__process";
-        global.metrics.add("__error", file, 1);
+    // this can cause a recursive loop...
+    //   so only allow a minimum standard
+    //   so don't accept errors about raising errors
+    const minimum = (event.level === "error" || event.level === "warn" || event.level === "info");
+    if (minimum && event.config !== "events") {
+        const events = global.configurations.find(config => config.name === "events");
+        if (events && events.destinations) {
+            if (event.file) event.__file = event.file;
+            events.destinations.forEach(destination => destination.offer([event]));
+        }
     }
 });
 
@@ -88,6 +82,21 @@ global.logger.log("verbose", `Dispatcher name = "${global.node}".`);
 if (!url) throw new Error("You must specify a controller URL to run this application.");
 global.logger.log("verbose", `Controller URL = "${url}".`);
 global.logger.log("verbose", `Controller interval = "${interval}".`);
+
+// managers (must be after log startup)
+global.checkpoints    = new Checkpoints({
+    mode: "dispatcher",
+    url:  url.combineAsPath("checkpoints/", global.node)
+});
+global.configurations = new Configurations({
+    mode: "dispatcher",
+    url:  url.combineAsPath("config/", global.node)
+});
+global.logFiles       = new LogFiles();
+global.metrics        = new Metrics({
+    mode: "dispatcher",
+    url:  url.combineAsPath("metrics/", global.node)
+});
 
 // startup
 (async () => {

@@ -5,6 +5,7 @@ import moment = require("moment");
 import { createHmac } from "crypto";
 import Testable, { TestableJSON } from "./Testable";
 import Checkpoint from "./Checkpoint";
+import Configuration from "./Configuration";
 
 // TODO: make these configurable
 const dispatchEvery = 10000;
@@ -23,6 +24,7 @@ export interface DestinationJSON extends TestableJSON {
 
 export default class Destination extends Testable {
 
+    public config:        Configuration;
     public name:          string;
     public connector?:    connector;
     public url?:          string;
@@ -31,17 +33,10 @@ export default class Destination extends Testable {
     public logType?:      string;
     public buffer:        any[]         = [];
     public handle?:       NodeJS.Timer;
+    public dispatcher?:   NodeJS.Timer;
 
     get isBusy() {
         return (this.handle);
-    }
-
-    public halt() {
-        if (this.handle) {
-            clearTimeout(this.handle);
-            this.handle = undefined;
-        }
-        this.buffer = [];
     }
 
     public isSame(other: DestinationJSON) {
@@ -54,11 +49,11 @@ export default class Destination extends Testable {
         return true;
     }
 
-    public offer(rows: any[], checkpoint: Checkpoint, pointer: number) {
+    public offer(rows: any[], checkpoint?: Checkpoint, pointer?: number) {
         
         // record the last offered pointer, this ensures that even if the buffers contain
         //  undispatched records, the same block isn't read from the file again
-        checkpoint.buffered = pointer;
+        if (checkpoint && pointer) checkpoint.buffered = pointer;
 
         // filter
         const filtered = rows.filter(row => {
@@ -69,30 +64,36 @@ export default class Destination extends Testable {
         });
         global.logger.log("debug", `${filtered.length} of ${rows.length} rows were accepted by "${this.name}".`);
 
-        // get a reference to the buffer (improves performance)
-        const buffer = this.buffer;
-
         // add the new rows to the buffer
         for (const row of filtered) {
-            buffer.push(row);
+            this.buffer.push(row);
         }
 
-        // either commit the checkpoint immediately or if there is a buffer, but it at the end
-        if (buffer.length < 1) {
-            checkpoint.committed = pointer;
-            global.logger.log("debug", `the checkpoint path "${checkpoint.path}" to "${checkpoint.destination}" committed to "${checkpoint.committed}".`);
-        } else {
-            buffer.push({
-                __checkpoint: checkpoint,
-                __pointer: pointer
-            });
+        // either commit the checkpoint immediately or if there is a buffer, put it at the end
+        if (checkpoint && pointer) {
+            if (this.buffer.length < 1) {
+                checkpoint.committed = pointer;
+                global.logger.log("debug", `the checkpoint path "${checkpoint.path}" to "${checkpoint.destination}" committed to "${checkpoint.committed}".`);
+            } else {
+                this.buffer.push({
+                    __checkpoint: checkpoint,
+                    __pointer: pointer
+                });
+            }
         }
 
         // log
-        global.logger.log("silly", `after the offer to "${this.name}", the buffer holds ${buffer.length} records (includes checkpoints).`);
+        global.logger.log("silly", `after the offer to "${this.name}", the buffer holds ${this.buffer.length} records (includes checkpoints).`);
+
+        /*
+        if (this.config.name === "events") {
+            console.log(rows);
+            throw new Error("stop here");
+        }
+        */
 
         // dispatch if buffer size is reached
-        if (buffer.length >= global.batchSize) this.dispatch();
+        if (this.buffer.length >= global.batchSize) this.dispatch();
 
     }
 
@@ -205,13 +206,13 @@ export default class Destination extends Testable {
 
         // there is no reason to run
         if (this.buffer.length < 1) {
-            global.logger.log("silly", `an attempt to dispatch to "${this.name}" found nothing in the buffer (abort).`);
+            global.logger.log("silly", `an attempt to dispatch to config "${this.config.name}" dest "${this.name}" found nothing in the buffer (abort).`);
             return;
         }
 
         // if something is already being dispatched, ignore
         if (this.isBusy) {
-            global.logger.log("debug", `an attempt to dispatch to "${this.name}" found it busy (abort).`);
+            global.logger.log("debug", `an attempt to dispatch to config "${this.config.name}" dest "${this.name}" found it busy (abort).`);
             return;
         };
 
@@ -224,7 +225,7 @@ export default class Destination extends Testable {
 
                 // make sure there is something to dispatch
                 if (buffer.length < 1) {
-                    global.logger.log("silly", `an attempt to dispatch to "${this.name}" found nothing in the buffer (abort).`);
+                    global.logger.log("silly", `an attempt to dispatch to config "${this.config.name}" dest "${this.name}" found nothing in the buffer (abort).`);
                     this.handle = undefined;
                     return;
                 }
@@ -254,14 +255,14 @@ export default class Destination extends Testable {
                         }
                     }
                 }
-                global.logger.log("verbose", `an attempt to dispatch to "${this.name}" found ${buffer.length} records in the buffer (including checkpoints), of which ${batch.length} records will be in the batch, committing ${checkpoints.length} checkpoints.`);
+                global.logger.log("verbose", `an attempt to dispatch to config "${this.config.name}" dest "${this.name}" found ${buffer.length} records in the buffer (including checkpoints), of which ${batch.length} records will be in the batch, committing ${checkpoints.length} checkpoints.`);
 
                 // post to the appropriate connector
                 await this.connectorFunction(batch);
 
                 // remove from buffer
                 this.buffer.splice(0, batch.length + checkpoints.length);
-                global.logger.log("verbose", `posted ${batch.length} records to "${this.name}" successfully, ${buffer.length} records (including checkpoints) remaining.`);
+                global.logger.log("verbose", `posted ${batch.length} records to config "${this.config.name}" dest "${this.name}" successfully, ${buffer.length} records (including checkpoints) remaining.`);
 
                 // update checkpoints
                 for (const row of checkpoints) {
@@ -271,7 +272,7 @@ export default class Destination extends Testable {
 
                 // record the flow metrics
                 for (const file of files) {
-                    global.metrics.add(this.name, file.path, file.count);
+                    global.metrics.add(this.name, this.config.name, file.path, file.count);
                 }
 
                 // keep going or clear
@@ -285,8 +286,12 @@ export default class Destination extends Testable {
             } catch (error) {
 
                 // log the error
-                global.logger.error(`failed to post batch to ${this.url}.`);
-                global.logger.error(error.stack);
+                global.logger.error(`config "${this.config.name}" dest "${this.name}" failed to post batch to "${this.url}".`, {
+                    config: this.config.name
+                });
+                global.logger.error(error.stack, {
+                    config: this.config.name
+                });
                 
                 // try again
                 this.handle = setTimeout(_ => { action(); }, tryAfter);
@@ -299,10 +304,24 @@ export default class Destination extends Testable {
         
     }
 
-    constructor(obj: DestinationJSON) {
+    /** This should be called before releasing all references to Destination. */
+    public dispose() {
+        if (this.handle) {
+            clearTimeout(this.handle);
+            this.handle = undefined;
+        }
+        if (this.dispatcher) {
+            clearInterval(this.dispatcher);
+            this.dispatcher = undefined;
+        }
+        this.buffer = [];
+    }
+
+    constructor(config: Configuration, obj: DestinationJSON) {
         super(obj);
 
         // base properties
+        this.config = config;
         this.name = obj.name;
         if (obj.connector) this.connector = obj.connector;
         if (obj.url) this.url = obj.url;
@@ -311,7 +330,9 @@ export default class Destination extends Testable {
         if (obj.logType) this.logType = obj.logType;
 
         // set the dispatch interval
-        setInterval(_ => { this.dispatch(); }, dispatchEvery);
+        if (this.config.enabled) {
+            this.dispatcher = setInterval(_ => { this.dispatch(); }, dispatchEvery);
+        }
 
     }
 
