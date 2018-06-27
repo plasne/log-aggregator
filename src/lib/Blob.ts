@@ -75,15 +75,39 @@ export default class Blob {
     // read specified block blob contents as JSON
     read(container: string, blob: string) {
         return new Promise((resolve, reject) => {
-            this.service.getBlobToText(container, blob, function (error, result) {
-                if (error) {
-                    global.logger.log("error", `Could not read blob "${blob}" in container "${container}": ${error}`);
-                    reject(error);
-                } else {
-                    const json = JSON.parse(result);
-                    resolve(json);
-                }
-            });
+            try {
+                this.service.getBlobToText(container, blob, function (error, result) {
+                    if (error) {
+                        global.logger.log("error", `Could not read blob "${blob}" in container "${container}": ${error}`);
+                        reject(error);
+                    } else {
+                        const json = JSON.parse(result);
+                        resolve(json);
+                    }
+                });
+            } catch (e) {
+                global.logger.log("error", `Exception when attemping to read container: ${e}`);
+                reject(e);
+            }
+        });
+    }
+
+    // list all blobs in container
+    list(container: string) {
+        return new Promise((resolve, reject) => {
+            try {
+                this.service.listBlobsSegmented(container, null, function (error, result) {
+                    if (error) {
+                        global.logger.log("error", `Could not read contents of container "${container}": ${error}`);
+                        reject(error);
+                    } else {
+                        resolve(result);
+                    }
+                });
+            } catch (e) {
+                global.logger.log("error", `Exception when attempting to list container contents: ${e}`);
+                reject(e);
+            }
         });
     }
 
