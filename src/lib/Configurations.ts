@@ -162,13 +162,15 @@ export default class Configurations extends Array<Configuration> {
                     const list: ConfigurationJSON[] = [];
                     for (const config of this) {
                         if (config.enabled === false) {
-                            // ignore
-                        } else if (!config.targets) {
+                            global.logger.log("silly", `"${req.params.hostname}" was not given config "${config.name}" because it was disabled.`);
+                        } else if (!config.targets || config.targets.length < 1) {
                             list.push(config.json);
+                            global.logger.log("silly", `"${req.params.hostname}" was given config "${config.name}" because no targets are specified.`);
                         } else if (config.targets.includes(req.params.hostname)) {
                             list.push(config.json);
+                            global.logger.log("silly", `"${req.params.hostname}" was given config "${config.name}" because it is listed as a target.`);
                         } else {
-                            // ignore
+                            global.logger.log("silly", `"${req.params.hostname}" was not given config "${config.name}" because it was not listed as a target.`);
                         }
                     }
                     return list;

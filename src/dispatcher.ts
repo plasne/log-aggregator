@@ -5,7 +5,7 @@ import cmd = require("commander");
 import * as winston from "winston";
 import * as os from "os";
 import * as util from "util";
-import * as path from "path";
+import urljoin = require("url-join");
 import Checkpoints from "./lib/Checkpoints";
 import Configurations from "./lib/Configurations";
 import LogFiles from "./lib/LogFiles";
@@ -31,9 +31,9 @@ cmd
     .parse(process.argv);
 
 // locals
-const logLevel: string   = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
-const url:      string   = cmd.url        || process.env.CONTROLLER_URL;
-const interval: number   = cmd.interval   || process.env.CONTROLLER_INTERVAL || 60000;
+const logLevel: string  = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
+const url: string       = cmd.url        || process.env.CONTROLLER_URL;
+const interval: number  = cmd.interval   || process.env.CONTROLLER_INTERVAL || 60000;
 
 // globals
 global.node           = cmd.nodeName   || process.env.DISPATCHER_NAME     || os.hostname();
@@ -76,16 +76,16 @@ global.logger.log("verbose", `Controller interval = "${interval}".`);
 // managers (must be after log startup)
 global.checkpoints    = new Checkpoints({
     mode: "dispatcher",
-    url:  path.join(url, "checkpoints", global.node)
+    url:  urljoin(url, "checkpoints", global.node)
 });
 global.configurations = new Configurations({
     mode: "dispatcher",
-    url:  path.join(url, "config", global.node)
+    url:  urljoin(url, "config", global.node)
 });
 global.logFiles       = new LogFiles();
 global.metrics        = new Metrics({
     mode: "dispatcher",
-    url:  path.join(url, "metrics", global.node)
+    url:  urljoin(url, "metrics", global.node)
 });
 
 // dispatch relevant vents to a log endpoint (needs to be after global.configurations has started up)

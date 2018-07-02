@@ -4,6 +4,7 @@ import Metrics from "../lib/Metrics";
 import Checkpoints from "../lib/Checkpoints";
 import LogFiles from "../lib/LogFiles";
 import Configurations from "../lib/Configurations";
+import { BlobService } from "azure-storage";
 
 declare global {
 
@@ -39,4 +40,16 @@ declare global {
         diff(target: T[]): differences<T>;
     }
 
+}
+
+declare module "azure-storage" {
+    module services {
+        module blob {
+            module blobservice {
+                interface BlobService {
+                    listBlobsSegmented(container: string, currentToken: common.ContinuationToken | null, callback: ErrorOrResult<BlobService.ListBlobsResult>): void;
+                }
+            }
+        }
+    }
 }

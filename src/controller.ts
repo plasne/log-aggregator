@@ -8,11 +8,11 @@ import moment = require("moment");
 import * as bodyParser from "body-parser";
 import * as fs from "fs";
 import * as util from "util";
+import  * as path from "path";
 import Metrics from "./lib/Metrics";
 import Metric, { Chart, DataPoint, Series } from "./lib/Metric";
 import Configurations from "./lib/Configurations";
 import Checkpoints from "./lib/Checkpoints";
-import  * as path from "path";
 
 // prototype extensions
 require("./lib/Array.prototype.diff.js");
