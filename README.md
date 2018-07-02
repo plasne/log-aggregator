@@ -82,8 +82,17 @@ Property     | Required? | Datatype         | Notes
 enabled | no | boolean | Defaults to "true"; set to "false" if you don't want this configuration passed down to dispatchers.
 targets | no | array of strings | You can specify the names of nodes to pass this configuration to; otherwise, it will pass to any dispatcher that asks.
 destinations | no | array of destinations | Destinations are the endpoints that log entries will be sent to. You almost always want at least 1 destination unless you are just reading log files for custom metrics.
-destination/name | yes | The name of a destination will appear in the metrics and help you diagnose problems.
-
+destination/name | yes | string | The name of a destination will appear in the metrics and help you diagnose problems.
+destination/connector | no | "URL" or "LogAnalytics" | Defaults to "URL"; this setting determines whether the logs are posted to a URL or a Log Analytics endpoint.
+destination/url | * | string | If the connector is set to "URL", you must specify the URL in this property.
+destination/workspaceId | * | GUID | If the connector is set to "LogAnalytics", you must specify the Workspace ID as a GUID.
+destination/workspaceKey | * | string | If the connector is set to "LogAnalytics", you must specify either the primary or secondary key.
+destination/logType | * | string | If the connector is set to "LogAnalytics", you must specify a name to use for the log entry type. Log Analytics will post-fix "_CL" (custom log) to the name.
+destination/and | no | array of conditions | If you specify the "and" operator, all conditions must be "true" in order for the record to be sent to the destination.
+destination/or | no | array of conditions | If you specify the "or" operator, any of the conditions must be "true" in order for the record to be sent to the destination.
+destination/not | no | array of conditions | If you specify the "not" operation, none of the conditions can be "true" in order for the records to be sent to the destination.
+condition/field | no | string | Defaults to "__raw"; __raw will attempt a match with the entire row.
+condition/test | yes | regex | If you specify a condition, you must specify a regular expression. If the regular expression matches then the test will pass as "true".
 
 ### Checkpoints
 
