@@ -5,7 +5,7 @@ The following tools are included in this project and compiled in the /bin folder
 
 * Controller: This application manages the configuration, metrics, and checkpoints for all dispatchers. It distributes the files and accepts changes as necessary. In addition, the controller has a web endpoint that can show charts of the captured metrics and provide metric data to Prometheus.
 
-* Dispatcher: This application asks the controller for configuration information regarding which log files to monitor, monitors them for changes, breaks the logs into rows and columns, distributes the logs to the necessary endpoints. It sends metric and checkpoint data to the controller.
+* Dispatcher: This application asks the controller for configuration information regarding which log files to monitor, monitors them for changes, breaks the logs into records and fields, distributes the logs to the necessary endpoints. It sends metric and checkpoint data to the controller.
 
 * Generator: This application generates random log entries in the specific formats. This can be used for testing.
 
@@ -54,33 +54,14 @@ You should place the controllers behind a load balancer and provide the URL of t
 
 Configuration files are written by an administrator and placed in the STATE_PATH folder. When a dispatcher starts up and every 1 minute (configurable) thereafter it requests all configuration files from the controller that are targeted for it. The configuration files define what the dispatcher is to watch, how it processes them, and where it dispatches them to.
 
-{
-    "enabled": true,
-    "targets": [
-
-    ],
-    "destinations": [
-        {
-            "name": "errors",
-            "connector": "url",
-            "url": "http://localhost:8091",
-            "workspaceId": "7544f951-a0fa-4d13-a194-3d105f1055f9",
-            "workspaceKey": "uKqdfIxjEAXvv0xYZt7DkgvBuupP5pg6vajpg1akiHFJaSkoxHu2g1XB7ZXAbnR36zzwwVYr+o9GIigH93K7Sg==",
-            "logType": "logagg_error",
-            "and": [
-                {
-                    "field": "level",
-                    "test": "error"
-                }
-            ]
-        }
-    ]
-}
-
 Property     | Required? | Datatype         | Notes
 ------------ | :-------: | :--------------: | -----
 enabled | no | boolean | Defaults to "true"; set to "false" if you don't want this configuration passed down to dispatchers.
 targets | no | array of strings | You can specify the names of nodes to pass this configuration to; otherwise, it will pass to any dispatcher that asks.
+sources | no | array of strings | You may specify a list of paths to folders or files that will be monitored for changes. You almost always want at least one source unless this is the events.cfg.json file (which should typically have none).
+breaker | no | "blank-line", "every-line", "expression" | Defaults to "every-line"; this setting determines the record breaker that will be used.
+expression | * | regex | If breaker is set to "expression", this property should contain the regular expression that when tested "true" indicates that a new record should be started.
+fields | no | regex | This regular expression will be matched against the record to break the record into fields. Regular expression groups will be used to determine the field names.
 destinations | no | array of destinations | Destinations are the endpoints that log entries will be sent to. You almost always want at least 1 destination unless you are just reading log files for custom metrics.
 destination/name | yes | string | The name of a destination will appear in the metrics and help you diagnose problems.
 destination/connector | no | "URL" or "LogAnalytics" | Defaults to "URL"; this setting determines whether the logs are posted to a URL or a Log Analytics endpoint.
@@ -91,8 +72,15 @@ destination/logType | * | string | If the connector is set to "LogAnalytics", yo
 destination/and | no | array of conditions | If you specify the "and" operator, all conditions must be "true" in order for the record to be sent to the destination.
 destination/or | no | array of conditions | If you specify the "or" operator, any of the conditions must be "true" in order for the record to be sent to the destination.
 destination/not | no | array of conditions | If you specify the "not" operation, none of the conditions can be "true" in order for the records to be sent to the destination.
-condition/field | no | string | Defaults to "__raw"; __raw will attempt a match with the entire row.
+condition/field | no | string | Defaults to "__raw"; __raw will attempt a match with the entire record.
 condition/test | yes | regex | If you specify a condition, you must specify a regular expression. If the regular expression matches then the test will pass as "true".
+metrics | no | array of metrics | This section will allow you to define custom metrics.
+metric/name | yes | string | The name of the metric will be shown in reports.
+metric/and | no | array of conditions | If you specify the "and" operator, all conditions must be "true" in order for the metric tally to be incremented by one.
+metric/or | no | array of conditions | If you specify the "or" operator, any of the conditions must be "true" in order for the metric tally to be incremented by one.
+metric/not | no | array of conditions | If you specify the "not" operation, none of the conditions can be "true" in order for the metric tally to be incremented by one.
+
+Sample configuration are provided in this project under the "/state" folder.
 
 ### Checkpoints
 
@@ -110,7 +98,7 @@ When a controller receives a metric message it merges it with the metrics it alr
 
 Dispatchers send metrics once every minute.
 
-#### Events
+### Events
 
 Logs that are generated by the controller that are of level "info", "warn", or "error" are eligible to be sent as events to a receiver, this requires a configuration file named "events.cfg.json". Other than the special name and purpose, the dispatch process works as normal (you could filter to just "error" level events, for instance).
 
