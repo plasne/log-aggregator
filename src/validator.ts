@@ -325,3 +325,6 @@ cmd
 
 // parse the command line arguments
 cmd.parse(process.argv);
+if (!cmd.args.find((arg: any) => arg instanceof cmd.Command)) {
+    console.warn("You must specify a valid command from: query, post, run.");
+}

@@ -1,6 +1,7 @@
 node_modules/
 logs/
 built/
+state/*.chk.json
 state/*.evt.json
 state/*.mtx.json
 test.ts

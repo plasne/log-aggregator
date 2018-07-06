@@ -11,7 +11,9 @@ export interface DataPoint {
 export interface MetricJSON extends TestableJSON {
     name:     string,
     node?:    string,
+    config?:  string,
     file?:    string,
+    counter?: number,
     entries?: DataPoint[]
 }
 
@@ -30,22 +32,29 @@ export default class Metric extends Array<DataPoint> {
 
     public  readonly name:      string;
     public           node:      string;
+
+    /** The name of the config that this file is derived from. If you change config, you should also change file. */
+    public           config?:   string;
+
+    /** The name of the actual file that this metric applies to. If you change file, you should also change config. */
     public           file?:     string;
+
     public           committed: string = "";
+    public           counter:   number = 0;
     private          testable?: Testable;
 
     public add(v: number): void {
         const ts = moment().utc().format("YYYY-MM-DDTHH:mm");
         const last = this[this.length - 1];
         if (last && last.ts === ts) {
-            global.logger.log("silly", `during metric add, metric "${this.name}" on node "${this.node}" for file "${this.file}" @ "${ts}" was ${last.v} + ${v} = ${last.v + v}.`);
+            global.logger.log("silly", `during metric add, metric "${this.name}" on node "${this.node}" for config "${this.config}" and file "${this.file}" @ "${ts}" was ${last.v} + ${v} = ${last.v + v}.`);
             last.v += v;
         } else {
             this.push({
                 ts: ts,
                 v: v
             });
-            global.logger.log("silly", `during metric add, metric "${this.name}" on node "${this.node}" for file "${this.file}" @ "${ts}" was created = ${v}.`);
+            global.logger.log("silly", `during metric add, metric "${this.name}" on node "${this.node}" for config "${this.config}" and file "${this.file}" @ "${ts}" was created = ${v}.`);
         }
     }
 
@@ -116,8 +125,10 @@ export default class Metric extends Array<DataPoint> {
         for (const entry of list) {
             const existing = this.find(e => e.ts === entry.ts);
             if (existing) {
+                this.counter = this.counter - existing.v + entry.v;
                 existing.v = entry.v;
             } else {
+                this.counter += entry.v;
                 this.push(entry);
             }
         }
@@ -184,7 +195,9 @@ export default class Metric extends Array<DataPoint> {
         return {
             name: this.name,
             node: this.node,
+            config: this.config,
             file: this.file,
+            counter: this.counter,
             entries: entries
         } as MetricJSON;
 
@@ -196,6 +209,7 @@ export default class Metric extends Array<DataPoint> {
         // base properties
         this.name = obj.name;
         this.node = obj.node || global.node;
+        if (obj.config) this.config = obj.config;
         if (obj.file) this.file = obj.file;
 
         // testable

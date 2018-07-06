@@ -20,7 +20,7 @@ export default class LogFiles extends Array<LogFile> {
         const existing = this.find(file => file.isMatch(path));
         if (existing) {
             this.remove(existing);
-            existing.halt();
+            existing.dispose();
             global.logger.log("verbose", `file "${path}" will no longer watched for changes.`);
         }
     }

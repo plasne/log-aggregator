@@ -27,18 +27,37 @@ function showOptions(dimension, node) {
     reports.html("");
     $("<span />").text(`by ${dimension}`).appendTo(reports);
 
-    // add the opposite as a link
-    const opposite = (dimension === "name") ? "file" : "name";
-    $(`<a href="#" />`).text(`view by ${opposite}`).click(function() {
-        getByDimension(opposite, node);
-        showOptions(opposite, node);
+    // add all possible
+    $(`<a href="#" />`).text("name and file").click(function() {
+        getByDimensions("name", "file", node);
+        showOptions("name and file", node);
+    }).appendTo(reports);
+    $(`<a href="#" />`).text("name and config").click(function() {
+        getByDimensions("name", "config", node);
+        showOptions("name and config", node);
+    }).appendTo(reports);
+    $(`<a href="#" />`).text("config and name").click(function() {
+        getByDimensions("config", "name", node);
+        showOptions("config and name", node);
+    }).appendTo(reports);
+    $(`<a href="#" />`).text("config and file").click(function() {
+        getByDimensions("config", "file", node);
+        showOptions("config and file", node);
+    }).appendTo(reports);
+    $(`<a href="#" />`).text("file and name").click(function() {
+        getByDimensions("file", "name", node);
+        showOptions("file and name", node);
+    }).appendTo(reports);
+    $(`<a href="#" />`).text("file and config").click(function() {
+        getByDimensions("file", "config", node);
+        showOptions("file and config", node);
     }).appendTo(reports);
 
 }
 
-function getByDimension(dimension, node) {
+function getByDimensions(primary, secondary, node) {
     $.ajax({
-        url: `/by-${dimension}/${node}`
+        url: `/metrics/by/${primary}/${secondary}/${node}`
     }).then(function(charts, status, xhr) {
 
         // clear charts
@@ -46,10 +65,10 @@ function getByDimension(dimension, node) {
 
         // sort by volume, error, then everything else by name
         charts.sort(function(a, b) {
-            if (a.name === "__volume") {
+            if (a.name === "volume") {
                 return -1;
-            } else if (a.name === "__error") {
-                return (b.name === "__volume") ? 1 : -1;
+            } else if (a.name === "errors") {
+                return (b.name === "volume") ? 1 : -1;
             } else {
                 return a.name.localeCompare(b.name);
             }
@@ -60,8 +79,7 @@ function getByDimension(dimension, node) {
 
             // create the chart
             const container = $("<div />").appendTo("#charts");
-            const title = /^[_]*(?<name>.+)$/.exec(chart.name).groups.name;
-            $("<h2 />").text(title).appendTo(container);
+            $("<h2 />").text(chart.name).appendTo(container);
             const div = $("<div />").addClass("chart").appendTo(container);
             const canvas = $("<canvas />").appendTo(div);
             const ctx = canvas.get(0).getContext("2d");
@@ -123,6 +141,6 @@ function getByDimension(dimension, node) {
 $(document).ready(function() {
     const qs = getParams(window.location.search);
     $("#node").text(qs.node);
-    showOptions("name", qs.node);
-    getByDimension("name", qs.node);
+    showOptions("name and file", qs.node);
+    getByDimensions("name", "file", qs.node);
 });

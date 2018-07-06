@@ -1,28 +1,46 @@
 
 // includes
 import axios from "axios";
+import { Router } from "express";
+import * as fs from "fs";
+import * as util from "util";
+import * as path from "path";
 import Checkpoint from "./Checkpoint";
 import Destination from "./Destination";
+
+// promisify
+const readFileAsync = util.promisify(fs.readFile);
+const writeFileAsync = util.promisify(fs.writeFile);
+
+type modes = "controller" | "dispatcher";
+
+export interface CheckpointsJSON {
+    mode:  modes,
+    url?:  string
+    path?: string
+}
 
 /**
  * This class helps manage all checkpoints.
  */
 export default class Checkpoints extends Array<Checkpoint> {
 
-    public url?:            string = "";
-    
+    public mode:            modes;
+    public url?:            string;
+    public router?:         Router;
+
     private handle?:        NodeJS.Timer;
     private _isInitialized: boolean = false;
 
-    get isInitialized() {
+    public get isInitialized() {
         return this._isInitialized;
     }
 
-    get isBusy() {
+    public get isBusy() {
         return (this.handle != null);
     }
 
-    byPathAndDestination(path: string, destinations: Destination[]) {
+    public byPathAndDestination(path: string, destinations: Destination[]) {
         const list = [];
         for (const destination of destinations) {
 
@@ -43,7 +61,7 @@ export default class Checkpoints extends Array<Checkpoint> {
                 });
                 list.push(checkpoint);
                 this.push(checkpoint);
-                global.logger.log("silly", `byPathAndDestination created a new checkpoint of "${path}" to "${destination}".`);
+                global.logger.log("silly", `of "${path}" to "${destination}".`);
             }
 
         }
@@ -51,7 +69,7 @@ export default class Checkpoints extends Array<Checkpoint> {
     }
 
     // get checkpoints from the server
-    async fetch() {
+    public async fetch() {
 
         // check for URL
         if (!this.url) {
@@ -79,7 +97,7 @@ export default class Checkpoints extends Array<Checkpoint> {
 
     }
 
-    report() {
+    public toJSON() {
         const output = [];
         for (const checkpoint of this) {
             output.push({
@@ -92,7 +110,7 @@ export default class Checkpoints extends Array<Checkpoint> {
         return output;
     }
 
-    async send() {
+    public async send() {
 
         // check for URL
         if (!this.url) {
@@ -112,7 +130,7 @@ export default class Checkpoints extends Array<Checkpoint> {
             try {
 
                 // craft the message
-                const msg = this.report();
+                const msg = this.toJSON();
     
                 // post the message to the controller
                 global.logger.log("verbose", `posting checkpoints to "${this.url}"...`);
@@ -136,12 +154,75 @@ export default class Checkpoints extends Array<Checkpoint> {
 
     }
 
-    constructor(url?: string) {
+    private expose(statepath: string) {
+        this.router = Router();
+
+        // provide checkpoints if asked
+        this.router.get("/:hostname", async (req, res) => {
+            try {
+
+                // asking
+                global.logger.log("verbose", `"${req.params.hostname}" is asking for checkpoints...`);
+                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
+                global.logger.log("debug", `looking for checkpoint file "${checkpointsPath}"...`);
+
+                // read the checkpoint file
+                try {
+                    const raw = await readFileAsync(checkpointsPath, "utf8");
+                    const obj = JSON.parse(raw);
+                    global.logger.log("verbose", `"${req.params.hostname}" was given the checkpoint file.`);
+                    global.logger.log("debug", raw);
+                    res.send(obj);
+                } catch (error) {
+                    if (error.code === "ENOENT") { // file doesn't exist
+                        global.logger.log("verbose", `"${req.params.hostname}" was informed there were no checkpoints.`);
+                        res.send([]); // send an empty checkpoint file, but it's a 200
+                    } else {
+                        throw error;
+                    }
+                }
+
+            } catch (error) {
+                global.logger.error(error.stack);
+                res.status(500).end();
+            }
+        });
+
+        // accept checkpoints
+        this.router.post("/:hostname", async (req, res) => {
+            try {
+
+                // write the checkpoints
+                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
+                try {
+                    global.logger.log("verbose", `writing checkpoint file "${checkpointsPath}"...`);
+                    await writeFileAsync(checkpointsPath, JSON.stringify(req.body));
+                    global.logger.log("verbose", `wrote checkpoint file "${checkpointsPath}".`);
+                } catch (error) {
+                    global.logger.error(`error writing checkpoint file "${checkpointsPath}".`);
+                    global.logger.error(error.stack);
+                }
+                res.status(200).end();
+
+            } catch (error) {
+                global.logger.error(error.stack);
+                res.status(500).end();
+            }
+        });
+
+    }
+
+    constructor(obj: CheckpointsJSON) {
         super();
         
-        // set URL if it exists
-        if (url && typeof url === "string") {
-            this.url = url;
+        // capture the mode
+        this.mode = obj.mode;
+        if (this.mode === "controller" && obj.path) this.expose(obj.path);
+
+        // if a URL is specified, checkpoints will be received from a remote controller
+        if (obj.url) {
+            this.url = obj.url;
+            return;
         }
 
     }

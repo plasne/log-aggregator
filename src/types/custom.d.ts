@@ -4,7 +4,6 @@ import Metrics from "../lib/Metrics";
 import Checkpoints from "../lib/Checkpoints";
 import LogFiles from "../lib/LogFiles";
 import Configurations from "../lib/Configurations";
-import Events_ from "../lib/Events";
 import { BlobService } from "azure-storage";
 
 declare global {
@@ -16,7 +15,6 @@ declare global {
             chunkSize: number,
             logger:  winston.Logger;
             configurations: Configurations;
-            events: Events_;
             metrics: Metrics;
             checkpoints: Checkpoints;
             logFiles: LogFiles
@@ -40,10 +38,6 @@ declare global {
         removeAll(o: T[]): void;
         groupBy(key: resolveToKey<T>): grouping<T>[];
         diff(target: T[]): differences<T>;
-    }
-
-    interface String {
-        combineAsPath(...parts: string[]): string;
     }
 
 }

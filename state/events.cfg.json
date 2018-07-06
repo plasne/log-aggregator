@@ -1,0 +1,22 @@
+{
+    "enabled": true,
+    "targets": [
+
+    ],
+    "destinations": [
+        {
+            "name": "errors",
+            "connector": "url",
+            "url": "http://localhost:8091",
+            "workspaceId": "7544f951-a0fa-4d13-a194-3d105f1055f9",
+            "workspaceKey": "uKqdfIxjEAXvv0xYZt7DkgvBuupP5pg6vajpg1akiHFJaSkoxHu2g1XB7ZXAbnR36zzwwVYr+o9GIigH93K7Sg==",
+            "logType": "logagg_error",
+            "and": [
+                {
+                    "field": "level",
+                    "test": "error"
+                }
+            ]
+        }
+    ]
+}
