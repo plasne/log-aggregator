@@ -26,20 +26,20 @@ export interface BreakerResult {
 
 export default class Configuration {
 
-    public          hash:          string;
-    public          json:          ConfigurationJSON;
-    public          path?:         string;
-    public readonly enabled:       boolean                   = true;
-    public readonly name:          string;
-    public readonly targets?:      string[];
-    public readonly sources?:      string[];
-    public readonly breaker:       string                    = "every-line";
-    public readonly expression?:   string;
-    public readonly ignore?:       string;
-    public readonly fields?:       string;
-    public readonly destinations?: Destination[];
-    public readonly metrics?:      MetricJSON[];
-    public          watcher?:      chokidar.FSWatcher;
+    public          hash:            string;
+    public          json:            ConfigurationJSON;
+    public          path?:           string;
+    public readonly enabled:         boolean                   = true;
+    public readonly name:            string;
+    public readonly targets?:        string[];
+    public readonly sources?:        string[];
+    public readonly breaker:         string                    = "every-line";
+    public readonly expression?:     string;
+    public readonly ignore?:         string;
+    public readonly fields?:         string;
+    public readonly destinations?:   Destination[];
+    public readonly metrics?:        MetricJSON[];
+    public          watcher?:        chokidar.FSWatcher;
 
     static get timestampFields() {
         return [ "year", "month", "day", "hour", "hours", "minute", "minutes", "second", "seconds", "ms", "millisecond", "milliseconds" ];
@@ -119,10 +119,10 @@ export default class Configuration {
     
     private breakOnEveryLine(buffer: string): BreakerResult {
         const lines = buffer.split("\n");
-        const last = lines.splice(lines.length - 1);
+        const last = lines.splice(lines.length - 1)[0];
         return {
             entries: lines,
-            extra: last[0].length
+            extra: last.length
         }
     }
     

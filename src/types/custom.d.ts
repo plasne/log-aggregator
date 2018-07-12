@@ -13,6 +13,7 @@ declare global {
             node: string,
             batchSize: number,
             chunkSize: number,
+            dispatchInterval: number,
             logger:  winston.Logger;
             configurations: Configurations;
             metrics: Metrics;

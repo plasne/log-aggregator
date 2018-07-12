@@ -24,21 +24,23 @@ cmd
     .version("0.1.0")
     .option("-l, --log-level <string>", `LOG_LEVEL. The minimum level to log to the console (error, warn, info, verbose, debug, silly). Defaults to "error".`, /^(error|warn|info|verbose|debug|silly)$/i)
     .option("-n, --node-name <string>", `DISPATCHER_NAME. The *unique* name that will be recorded for this dispatcher. Defaults to the system's hostname.`)
-    .option("-u, --url <string>", `CONTROLLER_URL. The URL of the controller(s). This is REQUIRED.`)
-    .option("-i, --interval <integer>", `CONTROLLER_INTERVAL. The number of milliseconds between each call to the controller to get configuration changes. Defaults to "60000" (1 minute).`, parseInt)
+    .option("-u, --url <string>", `[REQUIRED] CONTROLLER_URL. The URL of the controller(s).`)
+    .option("-i, --controller-interval <integer>", `CONTROLLER_INTERVAL. The number of milliseconds between each call to the controller to get configuration changes. Defaults to "60000" (1 minute).`, parseInt)
     .option("-c, --chunk-size <integer>", `CHUNK_SIZE. The max number of KBs that are read from a log file at a time. Higher levels mean more is kept in memory. Defaults to "5000" (5 MB).`, parseInt)
-    .option("-b, --batch-size <integer>", `BATCH_SIZE. The application will wait on the batch size or an interval before sending records. Defaults to "100".`, parseInt)
+    .option("-b, --batch-size <integer>", `BATCH_SIZE. The application will wait on the batch size or an interval (DISPATCH_INTERVAL) before sending records. Defaults to "100".`, parseInt)
+    .option("-d, --dispatch-interval <integer>", `DISPATCH_INTERVAL. The number of milliseconds until records are dispatched even if they don't meet the batch size. Defaults to "10000" (10 seconds).`, parseInt)
     .parse(process.argv);
 
 // locals
-const logLevel: string  = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
-const url: string       = cmd.url        || process.env.CONTROLLER_URL;
-const interval: number  = cmd.interval   || process.env.CONTROLLER_INTERVAL || 60000;
+const logLevel: string  = cmd.logLevel            || process.env.LOG_LEVEL            || "error";
+const url: string       = cmd.url                 || process.env.CONTROLLER_URL;
+const interval: number  = cmd.controllerInterval  || process.env.CONTROLLER_INTERVAL  || 60000;
 
 // globals
-global.node           = cmd.nodeName   || process.env.DISPATCHER_NAME     || os.hostname();
-global.chunkSize      = cmd.chunkSize  || process.env.CHUNK_SIZE          || 5000;
-global.batchSize      = cmd.batchSize  || process.env.BATCH_INTERVAL      || 100;
+global.node             = cmd.nodeName            || process.env.DISPATCHER_NAME     || os.hostname();
+global.chunkSize        = cmd.chunkSize           || process.env.CHUNK_SIZE          || 5000;
+global.batchSize        = cmd.batchSize           || process.env.BATCH_SIZE          || 100;
+global.dispatchInterval = cmd.dispatchInterval    || process.env.DISPATCH_INTERVAL   || 10000;
 
 // enable logging
 const logColors: {

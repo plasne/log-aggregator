@@ -7,10 +7,6 @@ import Testable, { TestableJSON } from "./Testable";
 import Checkpoint from "./Checkpoint";
 import Configuration from "./Configuration";
 
-// TODO: make these configurable
-const dispatchEvery = 10000;
-const tryAfter = 10000;
-
 type connector = "auto" | "LogAnalytics" | "URL";
 
 export interface DestinationJSON extends TestableJSON {
@@ -84,13 +80,6 @@ export default class Destination extends Testable {
 
         // log
         global.logger.log("silly", `after the offer to "${this.name}", the buffer holds ${this.buffer.length} records (includes checkpoints).`);
-
-        /*
-        if (this.config.name === "events") {
-            console.log(rows);
-            throw new Error("stop here");
-        }
-        */
 
         // dispatch if buffer size is reached
         if (this.buffer.length >= global.batchSize) this.dispatch();
@@ -294,7 +283,7 @@ export default class Destination extends Testable {
                 });
                 
                 // try again
-                this.handle = setTimeout(_ => { action(); }, tryAfter);
+                this.handle = setTimeout(_ => { action(); }, global.dispatchInterval);
 
             }
         }
@@ -331,7 +320,7 @@ export default class Destination extends Testable {
 
         // set the dispatch interval
         if (this.config.enabled) {
-            this.dispatcher = setInterval(_ => { this.dispatch(); }, dispatchEvery);
+            this.dispatcher = setInterval(_ => { this.dispatch(); }, global.dispatchInterval);
         }
 
     }
