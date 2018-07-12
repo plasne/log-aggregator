@@ -71,7 +71,7 @@ destination/workspaceKey | * | string | If the connector is set to "LogAnalytics
 destination/logType | * | string | If the connector is set to "LogAnalytics", you must specify a name to use for the log entry type. Log Analytics will post-fix "_CL" (custom log) to the name.
 destination/and | no | array of conditions | If you specify the "and" operator, all conditions must be "true" in order for the record to be sent to the destination.
 destination/or | no | array of conditions | If you specify the "or" operator, any of the conditions must be "true" in order for the record to be sent to the destination.
-destination/not | no | array of conditions | If you specify the "not" operation, none of the conditions can be "true" in order for the records to be sent to the destination.
+destination/not | no | array of conditions | If you specify the "not" operation, none of the conditions can be "true" in order for the record to be sent to the destination.
 condition/field | no | string | Defaults to "__raw"; __raw will attempt a match with the entire record.
 condition/test | yes | regex | If you specify a condition, you must specify a regular expression. If the regular expression matches then the test will pass as "true".
 metrics | no | array of metrics | This section will allow you to define custom metrics.
@@ -193,3 +193,61 @@ level | INFO
 service | Server:TCP:2C:1154
 namespace | com.server.impl.selector
 msg | Server:TCP:2C:1154: Connection accepted, Server: /1.1.1.1:1154 Client: /1.1.1.1:77781 keepAlive: true receiveBufferSize: 177408 sendBufferSize: 104588 reuseAddress: false tcpNoDelay: true soTimeout: 0
+
+Note that this application is written in JavaScript so the regular expression parser will support the JavaScript syntax.
+
+Note also that the regular expression in the configuration file must be escaped, so \d{4} becomes \\d{4}.
+
+Log files could contain timestamps in many different formats but the destination will need the timestamp in a particular format. For that reason, you must break apart each component of the timestamp into fields for "year", "month", "day", "hour", "minute", "second", and "ms"; at least as far as you have (for instance, if the format doesn't include seconds or milliseconds then leave those out).
+
+In addition to the fields you break apart, there are some addition fields that are added for your use in conditions. These are NOT sent in the payload to the destination.
+
+Field | Value
+----- | -----
+__raw | The text of the whole record before it has been broken into fields.
+__file | The filename of the log file this record was read from.
+
+After a record is split into fields, it is offered to all destinations and metrics.
+
+### Destinations
+
+When records are offered to a destination, they are accepted or not based on the conditions defined for the destination. There are 3 comparison types:
+
+* and - All conditions must be "true" in order for the record to be accepted.
+* or - Any of the conditions must be "true" in order for the record to be accepted.
+* not - None of the conditions can be "true" in order for the record to be accepted.
+
+The comparison is evaluated by testing regular expressions against fields in the record. For instance, we might want a destination to only accept WARN or ERROR level messsages, thereby ignoring the previous record example:
+
+```json
+{
+    "name": "important",
+    "url": "http://important",
+    "and": [
+        {
+            "field": "level",
+            "test": "(WARN|ERROR)"
+        }
+    ]
+}
+```
+
+There are more examples in the /state folder.
+
+### Metrics
+
+Metrics are automatically collected for the volume and errors in each file. However, if you wish to collect additional metrics, you can define a name (other than the reserved "volume" and "errors" names) and specify some conditions (same as destinations). All metrics are simple tallies.
+
+For example, if you wanted to count all records that contained the word "reboot":
+
+```json
+{
+    "name": "reboots",
+    "and": [
+        {
+            "field": "__raw",
+            "test": "(reboot)"
+        }
+    ]
+}
+```
