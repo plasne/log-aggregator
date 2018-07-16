@@ -1,29 +1,26 @@
 
 // includes
+import * as path from "path";
 import axios from "axios";
 import { Router } from "express";
-import * as fs from "fs";
-import * as util from "util";
-import * as path from "path";
 import Checkpoint from "./Checkpoint";
 import Destination from "./Destination";
-
-// promisify
-const readFileAsync = util.promisify(fs.readFile);
-const writeFileAsync = util.promisify(fs.writeFile);
+import FileHandler from "./FileHandler";
 
 type modes = "controller" | "dispatcher";
 
 export interface CheckpointsJSON {
     mode:  modes,
-    url?:  string
-    path?: string
+    url?:  string,
+    path?: string,
+    storageKey?: string,
+    storageSas?: string
 }
 
 /**
  * This class helps manage all checkpoints.
  */
-export default class Checkpoints extends Array<Checkpoint> {
+export default class Checkpoints extends FileHandler<Checkpoint> {
 
     public mode:            modes;
     public url?:            string;
@@ -162,24 +159,19 @@ export default class Checkpoints extends Array<Checkpoint> {
             try {
 
                 // asking
+                const checkpointPath = path.join(statepath, `${req.params.hostname}.chk.json`);
                 global.logger.log("verbose", `"${req.params.hostname}" is asking for checkpoints...`);
-                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
-                global.logger.log("debug", `looking for checkpoint file "${checkpointsPath}"...`);
+                global.logger.log("debug", `looking for file "${checkpointPath}"...`);
 
                 // read the checkpoint file
                 try {
-                    const raw = await readFileAsync(checkpointsPath, "utf8");
-                    const obj = JSON.parse(raw);
+                    const obj = await this.read(checkpointPath, "verbose");
                     global.logger.log("verbose", `"${req.params.hostname}" was given the checkpoint file.`);
-                    global.logger.log("debug", raw);
                     res.send(obj);
                 } catch (error) {
-                    if (error.code === "ENOENT") { // file doesn't exist
-                        global.logger.log("verbose", `"${req.params.hostname}" was informed there were no checkpoints.`);
-                        res.send([]); // send an empty checkpoint file, but it's a 200
-                    } else {
-                        throw error;
-                    }
+                    // errors should be ignored
+                    global.logger.log("verbose", `"${req.params.hostname}" was informed there were no checkpoints.`);
+                    res.send([]); // send an empty checkpoint file, but it's a 200
                 }
 
             } catch (error) {
@@ -192,14 +184,16 @@ export default class Checkpoints extends Array<Checkpoint> {
         this.router.post("/:hostname", async (req, res) => {
             try {
 
+                // determine the path
+                const checkpointPath = path.join(statepath, `${req.params.hostname}.chk.json`);
+
                 // write the checkpoints
-                const checkpointsPath = path.join(statepath, `${req.params.hostname}.chk.json`);
                 try {
-                    global.logger.log("verbose", `writing checkpoint file "${checkpointsPath}"...`);
-                    await writeFileAsync(checkpointsPath, JSON.stringify(req.body));
-                    global.logger.log("verbose", `wrote checkpoint file "${checkpointsPath}".`);
+                    global.logger.log("verbose", `writing checkpoint file "${checkpointPath}"...`);
+                    await this.write(checkpointPath, req.body);
+                    global.logger.log("verbose", `wrote checkpoint file "${checkpointPath}".`);
                 } catch (error) {
-                    global.logger.error(`error writing checkpoint file "${checkpointsPath}".`);
+                    global.logger.error(`error writing checkpoint file "${checkpointPath}".`);
                     global.logger.error(error.stack);
                 }
                 res.status(200).end();
@@ -214,17 +208,32 @@ export default class Checkpoints extends Array<Checkpoint> {
 
     constructor(obj: CheckpointsJSON) {
         super();
-        
-        // capture the mode
+
+        // startup depending on the mode
         this.mode = obj.mode;
-        if (this.mode === "controller" && obj.path) this.expose(obj.path);
+        switch (this.mode) {
+            case "controller":
+                if (obj.path) {
 
-        // if a URL is specified, checkpoints will be received from a remote controller
-        if (obj.url) {
-            this.url = obj.url;
-            return;
+                    // expose endpoints
+                    this.expose(obj.path);
+
+                    // start watching the configuration files
+                    if (obj.path.startsWith("http://") || obj.path.startsWith("https://")) {
+                        this.instantiateBlob(obj.path, obj.storageKey, obj.storageSas);
+                    } else {
+                        // nothing to do at this point
+                    }
+
+                }
+                break;
+
+            case "dispatcher":
+                if (obj.url) this.url = obj.url;
+                break;
+
         }
-
+        
     }
 
 }

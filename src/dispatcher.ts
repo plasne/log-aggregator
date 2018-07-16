@@ -69,11 +69,14 @@ global.logger = winston.createLogger({
 });
 
 // log variables
-console.log(`Log level set to "${logLevel}".`);
-global.logger.log("verbose", `Dispatcher name = "${global.node}".`);
+console.log(`LOG_LEVEL = "${logLevel}".`);
+global.logger.log("verbose", `DISPATCHER_NAME = "${global.node}".`);
 if (!url) throw new Error("You must specify a controller URL to run this application.");
-global.logger.log("verbose", `Controller URL = "${url}".`);
-global.logger.log("verbose", `Controller interval = "${interval}".`);
+global.logger.log("verbose", `CONTROLLER_URL = "${url}".`);
+global.logger.log("verbose", `CONTROLLER_INTERVAL = "${interval}".`);
+global.logger.log("verbose", `CHUNK_SIZE = "${global.chunkSize}".`);
+global.logger.log("verbose", `BATCH_SIZE = "${global.batchSize}".`);
+global.logger.log("verbose", `DISPATCH_INTERVAL = "${global.dispatchInterval}".`);
 
 // managers (must be after log startup)
 global.checkpoints    = new Checkpoints({

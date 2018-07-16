@@ -1,32 +1,35 @@
 
 // includes
+import { v4 as uuid } from "uuid";
 import axios from "axios";
 import { Router } from "express";
-import * as fs from "fs";
-import * as util from "util";
 import * as path from "path";
 import shortid = require("shortid");
 import * as chokidar from "chokidar";
 import moment = require("moment");
+import FileHandler from "./FileHandler";
 import Metric, { MetricJSON, Chart, Series, DataPoint } from "./Metric.js";
 import Configuration from "./Configuration.js";
-
-// promisify
-const readFileAsync = util.promisify(fs.readFile);
-const writeFileAsync = util.promisify(fs.writeFile);
 
 type modes = "controller" | "dispatcher";
 
 export interface MetricsJSON {
     mode:  modes,
-    url?:  string
-    path?: string
+    url?:  string,
+    path?: string,
+    storageKey?: string,
+    storageSas?: string
 }
 
-export default class Metrics extends Array<Metric> {
+interface MetricsFileFormat {
+    code:    string,
+    metrics: MetricJSON[]
+}
 
-    public          mode:    modes;
-    public          router?: Router;
+export default class Metrics extends FileHandler<Metric> {
+
+    public  mode:    modes;
+    public  router?: Router;
 
     /* Stores the last code generated for metrics received from a node. */
     private codes: {
@@ -95,34 +98,6 @@ export default class Metrics extends Array<Metric> {
         }
     }
 
-    /** Since multiple controllers can be used for HA, it is important they stay in sync for metrics.
-     *  This method is called whenever a change to a metric file has been discovered so that it can
-     *  be read by other controllers */
-    private async update(path: string) {
-        try {
-            global.logger.log("verbose", `loading "${path}"...`);
-            const match = /^(.*)\/(?<node>.*)\.mtx\.json$/.exec(path);
-            if (match && match.groups && match.groups.node) {
-                const raw = await readFileAsync(path, "utf8");
-                const data: {
-                    code:    string,
-                    metrics: MetricJSON[]
-                } = JSON.parse(raw);
-                if (this.codes[match.groups.node] !== data.code) {
-                    for (const obj of data.metrics) {
-                        this.merge(obj, true);
-                    }
-                    global.logger.log("verbose", `merged ${data.metrics.length} metrics from "${path}".`);
-                } else {
-                    global.logger.log("verbose", `ignoring "${path}" because this process generated the file.`);
-                }
-            }
-        } catch (error) {
-            global.logger.error(`could not load and parse "${path}".`);
-            global.logger.error(error.stack);
-        }
-    }
-
     private async send(url: string) {
         //if (!this.url) return;
         try {
@@ -187,7 +162,7 @@ export default class Metrics extends Array<Metric> {
                 }
                 global.logger.log("verbose", `merged metrics from "${req.params.hostname}".`);
 
-                // commit to disk
+                // consolidate
                 const metricPath = path.join(statepath, `${req.params.hostname}.mtx.json`);
                 const filtered = this.filter(metric => metric.node === req.params.hostname);
                 const data: {
@@ -201,7 +176,9 @@ export default class Metrics extends Array<Metric> {
                 for (const metric of filtered) {
                     data.metrics.push(metric.toJSON());
                 }
-                await writeFileAsync(metricPath, JSON.stringify(data));
+
+                // commit to disk
+                await this.write(metricPath, data);
                 global.logger.log("verbose", `metrics committed to disk as "${metricPath}".`);
 
                 res.status(200).end();
@@ -288,6 +265,73 @@ export default class Metrics extends Array<Metric> {
 
     }
 
+    /** Since multiple controllers can be used for HA, it is important they stay in sync for metrics.
+     *  This method is called whenever a change to a metric file has been discovered so that it can
+     *  be read by other controllers */
+    private async update(path: string, all: MetricsFileFormat) {
+        try {
+
+            // extract the node from the filename
+            const match = /(.*\/)?(?<name>.*).mtx.json$/gm.exec(path);
+            const node = (match && match.groups && match.groups.name) ? match.groups.name : uuid();
+
+            if (this.codes[node] !== all.code) {
+                for (const obj of all.metrics) {
+                    this.merge(obj, true);
+                }
+                global.logger.log("verbose", `merged ${all.metrics.length} metrics from "${path}".`);
+            } else {
+                global.logger.log("verbose", `ignoring "${path}" because this process generated the file.`);
+            }
+
+        } catch (error) {
+            global.logger.error(`could not load and parse "${path}".`);
+            global.logger.error(error.stack);
+        }
+    }
+
+    private watchLocal(localfolder: string) {
+
+        // use chokidar to watch
+        const metricPath = path.join(localfolder, "*.mtx.json");
+        global.logger.log("verbose", `started watching "${metricPath}" for metric files...`);
+        const configWatcher = chokidar.watch(metricPath);
+
+        // handle add, change
+        configWatcher.on("add", async localpath => {
+            const obj = await this.read(localpath) as MetricsFileFormat;
+            await this.update(localpath, obj);
+        }).on("change", async localpath => {
+            const obj = await this.read(localpath) as MetricsFileFormat;
+            await this.update(localpath, obj);
+        });
+
+    }
+
+    private async watchBlob(url: string, storageKey?: string, storageSas?: string) {
+
+        // instantiate the blob service
+        this.instantiateBlob(url, storageKey, storageSas);
+
+        // get a list of all files in the container
+        try {
+            global.logger.log("verbose", `getting a list of *.mtx.json files from "${url}"...`);
+            const list = await this.list(/.+\.mtx\.json$/gm);
+
+            // load each file found
+            for (const entry of list) {
+                const all = await this.read(entry.name) as MetricsFileFormat;
+                await this.update(entry.name, all);
+            }
+            global.logger.log("verbose", `${list.length} *.mtx.json files found at "${url}".`);
+
+        } catch (ex) {
+            global.logger.error(`could not read the list of *.mtx.json files from "${url}".`);
+            global.logger.error(ex.stack);
+        }
+
+    }
+
     constructor(obj: MetricsJSON) {
         super();
 
@@ -300,15 +344,14 @@ export default class Metrics extends Array<Metric> {
                     // expose endpoints
                     this.expose(obj.path);
 
-                    // read metrics files whenever they are changed so this controller can stay in sync
-                    const metricPath = path.join(obj.path, "*.mtx.json");
-                    global.logger.log("verbose", `started watching "${metricPath}" for metric files...`);
-                    const metricWatcher = chokidar.watch(metricPath);
-                    metricWatcher.on("add", path => {
-                        this.update(path);
-                    }).on("change", async path => {
-                        this.update(path);
-                    });
+                    // start watching the metric files
+                    if (obj.path) {
+                        if (obj.path.startsWith("http://") || obj.path.startsWith("https://")) {
+                            this.watchBlob(obj.path, obj.storageKey, obj.storageSas);
+                        } else {
+                            this.watchLocal(obj.path);
+                        }
+                    }
 
                 }
                 break;

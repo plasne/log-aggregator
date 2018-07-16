@@ -42,13 +42,20 @@ cmd
     .version("0.1.0")
     .option("-l, --log-level <string>", `LOG_LEVEL. The minimum level to log to the console (error, warn, info, verbose, debug, silly). Defaults to "error".`, /^(error|warn|info|verbose|debug|silly)$/i)
     .option("-p, --port <integer>", `PORT. The port to host the web services on. Defaults to "8080".`, parseInt)
-    .option("-s, --state-path <string>", `STATE_PATH. The path to all files mananging current state. Defaults to "./state".`)
+    .option("-s, --state-path <string>", `STATE_PATH. The local filepath or Azure Blob Storage URL to all files mananging current state. Defaults to "./state".`)
+    .option("-k, --storage-key <string>", `STORAGE_KEY. A key that can be used to authenticate to Azure Blob Storage. If an Azure Blob Storage URL is specified for STATE_PATH, either STORAGE_KEY or STORAGE_SAS must be specified.`)
+    .option("-a, --storage-sas <string>", `STORAGE_SAS. A SAS Token that can be used to authenticate to Azure Blob Storage. If an Azure Blob Storage URL is specified for STATE_PATH, either STORAGE_KEY or STORAGE_SAS must be specified.`)
     .parse(process.argv);
 
 // locals
-const logLevel: string         = cmd.logLevel   || process.env.LOG_LEVEL           || "error";
-const port:     number         = cmd.port       || process.env.PORT                || 8080;
-const state:    string         = cmd.statePath  || process.env.STATE_PATH          || "./state";
+const logLevel:   string              = cmd.logLevel    || process.env.LOG_LEVEL    || "error";
+const port:       number              = cmd.port        || process.env.PORT         || 8080;
+const statePath:  string              = cmd.statePath   || process.env.STATE_PATH   || "./state";
+const storageKey: string | undefined  = cmd.storageKey  || process.env.STORAGE_KEY;
+const storageSas: string | undefined  = cmd.storageSas  || process.env.STORAGE_SAS;
+
+// globals
+global.dispatchInterval = 30000; // hard-coded to every 30 seconds
 
 // enable logging
 const logColors: {
@@ -77,9 +84,11 @@ global.logger = winston.createLogger({
 });
 
 // log variables
-console.log(`Log level set to "${logLevel}".`);
-global.logger.log("verbose", `port = "${port}".`);
-global.logger.log("verbose", `state = "${state}".`);
+console.log(`LOG_LEVEL = "${logLevel}".`);
+global.logger.log("verbose", `PORT = "${port}".`);
+global.logger.log("verbose", `STATE_PATH = "${statePath}".`);
+if (storageKey) global.logger.log("verbose", `STORAGE_KEY = "${storageKey}".`);
+if (storageSas) global.logger.log("verbose", `STORAGE_SAS = "${storageSas}".`);
 
 // startup
 (async () => {
@@ -92,15 +101,21 @@ global.logger.log("verbose", `state = "${state}".`);
         // managers (must be after log startup)
         const configs: Configurations = new Configurations({
             mode: "controller",
-            path: state
+            path: statePath,
+            storageKey: storageKey,
+            storageSas: storageSas
         });
         const checkpoints: Checkpoints = new Checkpoints({
             mode: "controller",
-            path: state
+            path: statePath,
+            storageKey: storageKey,
+            storageSas: storageSas
         });
-        const metrics:  Metrics        = new Metrics({
+        const metrics:  Metrics = new Metrics({
             mode: "controller",
-            path: state
+            path: statePath,
+            storageKey: storageKey,
+            storageSas: storageSas
         });
 
         // dispatch relevant vents to a log endpoint (needs to be after configs has started up)

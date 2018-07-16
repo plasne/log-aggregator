@@ -1,71 +1,29 @@
 
 // includes
+import { v4 as uuid } from "uuid";
 import axios from "axios";
 import { Router } from "express";
 import * as chokidar from "chokidar";
 import objhash = require("object-hash");
-import { v4 as uuid } from "uuid";
-import * as fs from "fs";
-import * as util from "util";
 import * as path from "path";
+import FileHandler from "./FileHandler";
 import Configuration, { ConfigurationJSON } from "./Configuration.js";
-
-// promisify
-const readFileAsync = util.promisify(fs.readFile);
 
 type modes = "controller" | "dispatcher";
 
 export interface ConfigurationsJSON {
-    mode:  modes,
-    url?:  string,
-    path?: string
+    mode:        modes,
+    url?:        string,
+    path?:       string,
+    storageKey?: string,
+    storageSas?: string
 }
 
-export default class Configurations extends Array<Configuration> {
+export default class Configurations extends FileHandler<Configuration> {
 
-    public mode:    modes;
-    public url?:    string;
-    public router?: Router;
-
-    /** This is called whenever a configuration file is found to be added or modified. */
-    private async updateFromPath(path: string) {
-        try {
-
-            // function to instantiate the configuration
-            //  if mode = "controller", dispose of all destinations that aren't needed
-            const instantiate = (obj: ConfigurationJSON) => {
-                const config = new Configuration(obj);
-                config.path = path;
-                if (this.mode === "controller" && config.name !== "events" && config.destinations) {
-                    config.destinations.forEach(destination => destination.dispose());
-                }
-                return config;
-            };
-
-            // load the file
-            global.logger.log("verbose", `loading "${path}"...`);
-            const raw = await readFileAsync(path, {
-                encoding: "utf8"
-            });
-            const obj = JSON.parse(raw) as ConfigurationJSON;
-            const match = /^(.*)\/(?<name>.*).cfg.json$/.exec(path);
-            obj.name = (match && match.groups && match.groups.name) ? match.groups.name : uuid();
-
-            // add or update
-            const index = this.findIndex(config => config.name === obj.name);
-            if (index < 0) {
-                this.push( instantiate(obj) );
-                global.logger.log("verbose", `loaded "${path}".`);
-            } else {
-                this[index] = instantiate(obj);
-                global.logger.log("verbose", `updated "${path}".`);
-            }
-
-        } catch (error) {
-            global.logger.error(`could not load and parse "${path}".`);
-            global.logger.error(error.stack);
-        }
-    }
+    public mode:       modes;
+    public url?:       string;
+    public router?:    Router;
 
     // overload example
     private delete(config: Configuration): void;
@@ -96,6 +54,8 @@ export default class Configurations extends Array<Configuration> {
             // asking
             global.logger.log("verbose", `getting configuration from "${this.url}"...`);
             const response = await axios.get(this.url);
+
+            // kk: if statement here to get from blob or local???
 
             // look for new configs and/or changes to their sources
             const source: ConfigurationJSON[] = response.data;
@@ -188,6 +148,113 @@ export default class Configurations extends Array<Configuration> {
 
     }
 
+    private async update(path: string, obj: ConfigurationJSON) {
+
+        // set the name based on the filename
+        const match = /(.*\/)?(?<name>.*).cfg.json$/gm.exec(path);
+        obj.name = (match && match.groups && match.groups.name) ? match.groups.name : uuid();
+
+        // instantiate a new controller
+        //  if mode = "controller", dispose of all destinations that aren't needed
+        const instantiate = (obj: ConfigurationJSON) => {
+            const config = new Configuration(obj);
+            config.path = path;
+            if (this.mode === "controller" && config.name !== "events" && config.destinations) {
+                config.destinations.forEach(destination => destination.dispose());
+            }
+            return config;
+        }
+
+        // add or update
+        const index = this.findIndex(config => config.name === obj.name);
+        if (index < 0) {
+            this.push( instantiate(obj) );
+            global.logger.log("verbose", `loaded "${obj.name}".`);
+        } else {
+            this[index] = instantiate(obj);
+            global.logger.log("verbose", `updated "${obj.name}".`);
+        }
+
+    }
+
+    private watchLocal(localfolder: string) {
+
+        // use chokidar to watch
+        const configPath = path.join(localfolder, "*.cfg.json");
+        global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
+        const configWatcher = chokidar.watch(configPath);
+
+        // handle add, change, move/delete
+        configWatcher.on("add", async localpath => {
+            const obj = await this.read(localpath) as ConfigurationJSON;
+            await this.update(localpath, obj);
+        }).on("change", async localpath => {
+            const obj = await this.read(localpath) as ConfigurationJSON;
+            await this.update(localpath, obj);
+        }).on("raw", (event, localpath) => {
+            if (event === "moved" || event === "deleted") {
+                this.delete(localpath);
+            }
+        });
+
+    }
+
+    private async watchBlob(url: string, storageKey?: string, storageSas?: string) {
+
+        // instantiate the blob service provider
+        this.instantiateBlob(url, storageKey, storageSas);
+
+        // get a list of all files in the container
+        try {
+            global.logger.log("verbose", `getting a list of *.cfg.json files from "${url}"...`);
+            const list = await this.list(/.+\.cfg\.json$/gm);
+
+            // load each file found
+            for (const entry of list) {
+                const obj = await this.read(entry.name) as ConfigurationJSON;
+                await this.update(entry.name, obj);
+            }
+            global.logger.log("verbose", `${list.length} *.cfg.json files found at "${url}".`);
+
+        } catch (ex) {
+            global.logger.error(`could not read the list of *.cfg.json files from "${url}".`);
+            global.logger.error(ex.stack);
+        }
+
+        // endpoint for blob storage to report a change event
+        /*
+        if (this.router) {
+            this.router.post("/blob-changed", (req, res) => {
+                const event = req.body[0];
+
+                // respond correctly to a validation request
+                const eventType = req.get("Aeg-Event-Type");
+                if (eventType && eventType === "SubscriptionValidation") {
+                    const isValidationEvent = event && event.data &&
+                        event.data.validationCode &&
+                        event.eventType && event.eventType == "Microsoft.EventGrid.SubscriptionValidationEvent";
+                    if (isValidationEvent) {
+                        res.send({
+                            "validationResponse": event.data.validationCode
+                        });
+                        return;
+                    }
+                }
+            
+                // document
+                if (event.eventType == "Microsoft.Storage.BlobCreated") {
+                    global.logger.log("verbose", `Blob created`);
+                }
+            
+                global.logger.log("debug", `EventGrid event: ${JSON.stringify(req.body)}`);
+                res.status(200).end();
+
+            });
+        }
+        */
+
+    }
+
     constructor(obj: ConfigurationsJSON) {
         super();
 
@@ -199,20 +266,13 @@ export default class Configurations extends Array<Configuration> {
                 // expose endpoints
                 this.expose();
 
-                // read the config files from a local disk
+                // start watching the configuration files
                 if (obj.path) {
-                    const configPath = path.join(obj.path, "*.cfg.json");
-                    global.logger.log("verbose", `started watching "${configPath}" for configuration files...`);
-                    const configWatcher = chokidar.watch(configPath);
-                    configWatcher.on("add", path => {
-                        this.updateFromPath(path);
-                    }).on("change", async path => {
-                        this.updateFromPath(path);
-                    }).on("raw", (event, path) => {
-                        if (event === "moved" || event === "deleted") {
-                            this.delete(path);
-                        }
-                    });
+                    if (obj.path.startsWith("http://") || obj.path.startsWith("https://")) {
+                        this.watchBlob(obj.path, obj.storageKey, obj.storageSas);
+                    } else {
+                        this.watchLocal(obj.path);
+                    }
                 }
 
                 break;
