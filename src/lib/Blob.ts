@@ -114,11 +114,11 @@ export default class Blob {
     }
 
     constructor(url: string, key?: string, sas?: string) {
-        const match = /^http(s)?:\/\/(?<account>.+)\.blob\.core\.windows\.net\/(?<container>.+)$/gm.exec(url);
-        if (match && match.groups && match.groups.account && match.groups.container) {
+        const match = /^(?<host>http(?:s)?:\/\/(?<account>.+)\.blob\.core\.windows\.net)\/(?<container>.+)$/gm.exec(url);
+        if (match && match.groups && match.groups.host && match.groups.account && match.groups.container) {
             this.container = match.groups.container;
             if (sas) {
-                this.service = azs.createBlobServiceWithSas(url, sas);
+                this.service = azs.createBlobServiceWithSas(match.groups.host, sas);
             } else if (key) {
                 this.service = azs.createBlobService(match.groups.account, key);
             } else {

@@ -87,8 +87,8 @@ global.logger = winston.createLogger({
 console.log(`LOG_LEVEL = "${logLevel}".`);
 global.logger.log("verbose", `PORT = "${port}".`);
 global.logger.log("verbose", `STATE_PATH = "${statePath}".`);
-if (storageKey) global.logger.log("verbose", `STORAGE_KEY = "${storageKey}".`);
-if (storageSas) global.logger.log("verbose", `STORAGE_SAS = "${storageSas}".`);
+if (storageKey) global.logger.log("verbose", `STORAGE_KEY = "masked".`);
+if (storageSas) global.logger.log("verbose", `STORAGE_SAS = "masked".`);
 
 // startup
 (async () => {
