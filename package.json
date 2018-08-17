@@ -6,7 +6,7 @@
     "dependencies": {
         "adal-node": "^0.1.28",
         "axios": "^0.18.0",
-        "azure-storage": "^2.10.0",
+        "azure-storage": "^2.10.1",
         "body-parser": "^1.18.3",
         "chokidar": "^2.0.3",
         "commander": "^2.15.1",

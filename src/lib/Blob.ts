@@ -106,7 +106,10 @@ export default class Blob {
 
         // filter if a pattern should be applied
         if (pattern) {
-            return all.filter(entry => pattern.test(entry.name));
+            return all.filter(entry => {
+                pattern.lastIndex = 0; // reset
+                return pattern.test(entry.name);
+            });
         } else {
             return all;
         }
